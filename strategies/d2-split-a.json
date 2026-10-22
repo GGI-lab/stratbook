@@ -1,0 +1,143 @@
+{
+  "id": "d2-split-a",
+  "map": { "text": "Dust 2", "source": "pdf" },
+  "side": { "text": "Terro", "source": "pdf" },
+  "title": { "text": "Split A, 3 Long + 2 Short", "source": "pdf" },
+  "sourceDocument": "D2 Terro - Split A - 3 Long + 2 Short.pdf",
+  "groups": [
+    { "id": "long", "label": { "text": "Long", "source": "pdf" }, "players": ["j1", "j2", "j3"] },
+    { "id": "short", "label": { "text": "Short", "source": "pdf" }, "players": ["j4", "j5"] }
+  ],
+  "roles": {
+    "j1": {
+      "number": 1,
+      "group": "long",
+      "title": { "text": "Long, ouvreur", "source": "pdf" },
+      "summary": { "text": "Premier contact Long. Nettoie le trajet vers A : Long, Pit, Car, Rampe, site.", "source": "pdf" },
+      "utilities": []
+    },
+    "j2": {
+      "number": 2,
+      "group": "long",
+      "title": { "text": "Long, support et trade J1, bombe", "source": "pdf" },
+      "summary": { "text": "Toujours derrière, prêt pour le trade de J1. Plante la bombe.", "source": "pdf" },
+      "utilities": [
+        { "text": "Smoke CT", "source": "pdf" },
+        { "text": "Molotov Car", "source": "pdf" },
+        { "text": "Flash de support si J1 la demande", "source": "pdf" }
+      ]
+    },
+    "j3": {
+      "number": 3,
+      "group": "long",
+      "title": { "text": "Long, close", "source": "pdf" },
+      "summary": { "text": "Aide J1 et J2, puis reste Long pour sécuriser contre la rotation.", "source": "pdf" },
+      "utilities": [
+        { "text": "Flash Long pour J1", "source": "pdf" },
+        { "text": "Smoke portes Long après la pose", "source": "pdf" }
+      ]
+    },
+    "j4": {
+      "number": 4,
+      "group": "short",
+      "title": { "text": "Short, ouvreur", "source": "pdf" },
+      "summary": { "text": "Premier contact Short. Nettoie le trajet vers A : Mid, Short.", "source": "pdf" },
+      "utilities": [
+        { "text": "Resmoke CT si besoin", "source": "pdf" },
+        { "text": "Flash CT", "source": "pdf" }
+      ]
+    },
+    "j5": {
+      "number": 5,
+      "group": "short",
+      "title": { "text": "Short, sniper", "source": "pdf" },
+      "summary": { "text": "Prend l'info Mid : joueurs vers B et push Mid.", "source": "pdf" },
+      "utilities": [
+        { "text": "Molotov Lower", "source": "pdf" },
+        { "text": "Smoke Xbox", "source": "pdf" },
+        { "text": "Flash Short pour J4", "source": "pdf" }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "n": 1,
+      "title": { "text": "Prendre Long et Mid", "source": "ajout" },
+      "team": [
+        { "group": "long", "text": "J1, J2 et J3 sécurisent Long jusqu'à Car et contrôle site A.", "source": "pdf" },
+        { "group": "short", "text": "J5 peek Mid depuis Suicide, J4 contrôle Top Mid.", "source": "pdf" }
+      ],
+      "calls": [
+        { "group": "long", "text": "Long go", "source": "pdf" },
+        { "group": "short", "text": "Mid clear", "source": "pdf" }
+      ],
+      "roles": {
+        "j1": [{ "text": "Sécurise Long jusqu'à Car et contrôle site A, avec J2 et J3.", "source": "pdf" }],
+        "j2": [{ "text": "Sécurise Long jusqu'à Car et contrôle site A, avec J1 et J3.", "source": "pdf" }],
+        "j3": [{ "text": "Sécurise Long jusqu'à Car et contrôle site A, avec J1 et J2.", "source": "pdf" }],
+        "j4": [{ "text": "Contrôle Top Mid.", "source": "pdf" }],
+        "j5": [{ "text": "Peek Mid depuis Suicide.", "source": "pdf" }]
+      }
+    },
+    {
+      "n": 2,
+      "title": { "text": "Préparer la convergence", "source": "ajout" },
+      "team": [
+        { "group": "long", "text": "J2 smoke CT, J1 prêt à avancer Rampe, J3 sécurise derrière.", "source": "pdf" },
+        { "group": "short", "text": "J4 avance Short sur la flash de J5, qui le suit.", "source": "pdf" }
+      ],
+      "calls": [
+        { "group": "long", "text": "CT smoké", "source": "pdf" },
+        { "group": "short", "text": "Short prise", "source": "pdf" }
+      ],
+      "roles": {
+        "j1": [{ "text": "Prêt à avancer Rampe.", "source": "pdf" }],
+        "j2": [{ "text": "Smoke CT.", "source": "pdf" }],
+        "j3": [{ "text": "Sécurise derrière.", "source": "pdf" }],
+        "j4": [{ "text": "Avance Short sur la flash de J5.", "source": "pdf" }],
+        "j5": [{ "text": "Flash pour J4, puis le suit dans Short.", "source": "pdf" }]
+      }
+    },
+    {
+      "n": 3,
+      "title": { "text": "Entrer sur A et planter", "source": "ajout" },
+      "team": [
+        { "group": "all", "text": "Flash Long et flash Short pour la prise du A. J2 plante.", "source": "pdf" },
+        { "group": "short", "text": "J4 et J5 reprennent le CT depuis Short et gardent l'arrière de Short.", "source": "pdf" }
+      ],
+      "calls": [
+        { "group": "all", "text": "Go site", "source": "pdf" }
+      ],
+      "roles": {
+        "j1": [],
+        "j2": [{ "text": "Plante la bombe.", "source": "pdf" }],
+        "j3": [{ "text": "Flash Long pour J1.", "source": "ajout" }],
+        "j4": [{ "text": "Avec J5 : reprend le CT depuis Short et garde l'arrière de Short.", "source": "pdf" }],
+        "j5": [
+          { "text": "Flash Short pour J4.", "source": "ajout" },
+          { "text": "Avec J4 : reprend le CT depuis Short et garde l'arrière de Short.", "source": "pdf" }
+        ]
+      }
+    },
+    {
+      "n": 4,
+      "title": { "text": "Sécuriser après la pose", "source": "ajout" },
+      "team": [
+        { "group": "all", "text": "J1 et J2 aident CT, J3 garde Long, J5 garde l'arrière.", "source": "pdf" },
+        { "group": "all", "text": "Contrôle du site, smoke et molotov s'il en reste.", "source": "pdf" }
+      ],
+      "calls": [],
+      "roles": {
+        "j1": [{ "text": "Aide côté CT.", "source": "pdf" }],
+        "j2": [{ "text": "Aide côté CT.", "source": "pdf" }],
+        "j3": [{ "text": "Garde Long.", "source": "pdf" }],
+        "j4": [],
+        "j5": [{ "text": "Garde l'arrière.", "source": "pdf" }]
+      }
+    }
+  ],
+  "labels": {
+    "noNewInstruction": { "text": "Pas de nouvelle consigne", "source": "ajout" },
+    "utilitiesHeading": { "text": "Utilitaires (timing libre)", "source": "ajout" }
+  }
+}
