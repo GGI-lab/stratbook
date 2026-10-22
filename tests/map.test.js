@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { renderStepSvg } from '../src/map/render.js';
 import { ZONES, VIEWBOX } from '../src/map/dust2.js';
 
@@ -17,8 +17,14 @@ test('chaque étape place les 5 joueurs dans le cadre', () => {
   for (const s of data.steps)
     for (const r of ROLES) {
       const [x, y] = s.map.positions[r] ?? [];
-      assert.ok(x >= 0 && x <= VIEWBOX.width && y >= 0 && y <= VIEWBOX.height, `étape ${s.n}, ${r}`);
+      const inX = x >= VIEWBOX.x && x <= VIEWBOX.x + VIEWBOX.width;
+      const inY = y >= VIEWBOX.y && y <= VIEWBOX.y + VIEWBOX.height;
+      assert.ok(inX && inY, `étape ${s.n}, ${r} hors cadre`);
     }
+});
+
+test("l'image de fond est présente", () => {
+  assert.ok(existsSync(new URL('../public/maps/dust2.webp', import.meta.url)));
 });
 
 test('chaque étape se dessine, en vue équipe et pour chaque rôle', () => {
