@@ -229,9 +229,11 @@ $('empty-new').addEventListener('click', () => startEditor(null));
 
 // ---------- Éditeur ----------
 // Retour du téléphone dans l'éditeur : comme « Annuler » (confirmation si des changements seraient perdus).
-async function backFromEditor() {
-  const closed = await editorBack();
-  if (!closed) openLayer('editor', backFromEditor); // l'utilisateur continue : on remet l'entrée d'historique
+// L'entrée d'historique est remise tout de suite : tant que l'éditeur est ouvert, un nouveau retour
+// ne peut pas quitter le site. Si l'éditeur se ferme, onClose la retire (closeLayer).
+function backFromEditor() {
+  openLayer('editor', backFromEditor);
+  editorBack();
 }
 
 function startEditor(strategy) {

@@ -239,6 +239,7 @@ window.visualViewport?.addEventListener('resize', onViewport);
 /** Bouton retour du téléphone : comme « Annuler ». Renvoie true si l'éditeur est fermé. */
 export async function editorBack() {
   if (!ctx) return true;
+  if ($('confirm-dialog').open) return false; // question déjà posée
   if (ctx.dirty) {
     const ok = await confirmDialog({ title: 'Quitter sans enregistrer ?', text: 'Tes modifications seront perdues.', ok: 'Quitter', cancel: 'Continuer', danger: true });
     if (!ctx) return true;
