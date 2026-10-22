@@ -28,7 +28,15 @@
 
     <main class="layout">
       <figure class="board">
-        <div class="board__map" id="map"></div>
+        <div class="board__stage">
+          <button type="button" class="play" id="play" aria-pressed="false" aria-describedby="play-hint">
+            <svg class="play__icon play__icon--play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>
+            <svg class="play__icon play__icon--stop" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z" /></svg>
+            <span class="play__label">Lecture</span>
+          </button>
+          <span class="sr" id="play-hint">Rejoue toute la stratégie, du départ à la dernière étape.</span>
+          <div class="board__map" id="map"></div>
+        </div>
         <figcaption class="board__note" id="map-note"></figcaption>
       </figure>
 

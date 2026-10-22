@@ -26,3 +26,5 @@ export const ZONES = [
   { id: 'suicide', name: 'Suicide', anchor: [450, 740] },
   { id: 'tSpawn', name: 'Spawn T', anchor: [400, 900] },
 ];
+
+export const DUST2 = { id: 'dust2', name: 'Dust 2', background: BACKGROUND, viewBox: VIEWBOX, zones: ZONES };

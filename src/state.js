@@ -5,7 +5,9 @@ export const ROLES = ['j1', 'j2', 'j3', 'j4', 'j5'];
 export const TEAM = 'equipe';
 export const VIEWS = [TEAM, ...ROLES];
 export const STEP_MIN = 1;
-export const STEP_MAX = 4;
+// Une stratégie compte de 3 à 5 étapes : le lien accepte jusqu'à 5, l'interface borne ensuite
+// au nombre réel d'étapes de la stratégie.
+export const STEP_MAX = 5;
 export const NICK_MAX = 16;
 
 const KEY_ROLE = 'stratbook:role';
@@ -74,7 +76,7 @@ export function buildShareUrl(baseUrl, strategyId, { step, view, nicknames }) {
   return url.toString();
 }
 
-export const clampStep = (n) => Math.min(STEP_MAX, Math.max(STEP_MIN, n));
+export const clampStep = (n, max = STEP_MAX) => Math.min(max, Math.max(STEP_MIN, n));
 
 // Stockage local : peut être indisponible (navigation privée, stockage bloqué).
 export function createStore(storage) {

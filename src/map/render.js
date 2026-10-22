@@ -2,7 +2,8 @@
 // dans le navigateur comme dans les tests et l'aperçu Node.
 // Inspiration visuelle : cs2.cam (carte en gris, seuls les joueurs en couleur, pastille
 // orientée) et stratbook.pro (tracés courbes, utilitaires discrets).
-import { BACKGROUND, VIEWBOX, ZONES } from './dust2.js';
+import { getMap } from './maps.js';
+import { facing } from './routes.js';
 
 export const PLAYER_COLORS = {
   j1: '#4ADE80',
@@ -41,7 +42,6 @@ const CONE_HALF_ANGLE = 32; // degrés, cône de 64°
 const esc = (s) =>
   String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
-const zoneById = Object.fromEntries(ZONES.map((z) => [z.id, z]));
 const r1 = (n) => Math.round(n * 10) / 10;
 
 // Courbe lisse passant par tous les points (Catmull-Rom convertie en Bézier).
@@ -61,16 +61,14 @@ export function smoothPath(points) {
   return d;
 }
 
-// Angle (radians) du joueur vers le point regardé.
-const angleTo = ([x, y], [tx, ty]) => Math.atan2(ty - y, tx - x);
+// Cône de vision dessiné à l'origine, pointé vers la droite ; placé et orienté par transform.
+const H = (CONE_HALF_ANGLE * Math.PI) / 180;
+const CONE_D = `M0,0 L${r1(CONE_RADIUS * Math.cos(H))},${r1(-CONE_RADIUS * Math.sin(H))} A${CONE_RADIUS},${CONE_RADIUS} 0 0 1 ${r1(CONE_RADIUS * Math.cos(H))},${r1(CONE_RADIUS * Math.sin(H))} Z`;
 
-function cone(uid, role, [x, y], look) {
-  const a = angleTo([x, y], look);
-  const h = (CONE_HALF_ANGLE * Math.PI) / 180;
-  const p1 = [x + CONE_RADIUS * Math.cos(a - h), y + CONE_RADIUS * Math.sin(a - h)];
-  const p2 = [x + CONE_RADIUS * Math.cos(a + h), y + CONE_RADIUS * Math.sin(a + h)];
-  return `<path d="M${x},${y} L${r1(p1[0])},${r1(p1[1])} A${CONE_RADIUS},${CONE_RADIUS} 0 0 1 ${r1(p2[0])},${r1(p2[1])} Z" fill="url(#cone-${uid}-${role})"/>`;
-}
+/** Transformations qui placent un joueur et son cône (utilisées aussi par l'animation). */
+export const placePlayer = ([x, y]) => `translate(${r1(x)} ${r1(y)})`;
+export const placeCone = ([x, y], deg) => `translate(${r1(x)} ${r1(y)}) rotate(${r1(deg)})`;
+export const rotateBeak = (deg) => `rotate(${r1(deg)})`;
 
 function defs() {
   const markers = Object.entries(PLAYER_COLORS)
@@ -88,9 +86,13 @@ function defs() {
  * @param {object} [opts]
  * @param {string|null} [opts.focus]  rôle mis en avant (j1..j5), null = vue équipe
  * @param {string} [opts.imageHref]   URL de l'image de fond
+ * @param {object} [opts.map]         carte (par défaut celle de la stratégie)
  */
 export function renderStepSvg(strategy, stepN, opts = {}) {
   const focus = opts.focus ?? null;
+  const map = opts.map ?? getMap(strategy.map);
+  const { background: BACKGROUND, viewBox: VIEWBOX } = map;
+  const zoneById = Object.fromEntries(map.zones.map((z) => [z.id, z]));
   const href = opts.imageHref ?? BACKGROUND.href;
   const step = strategy.steps.find((s) => s.n === stepN);
   if (!step) throw new Error(`Étape ${stepN} introuvable`);
@@ -101,16 +103,20 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
   // Joueur sélectionné dessiné en dernier pour rester au-dessus.
   const order = Object.keys(m.positions).sort((a, b) => (a === focus) - (b === focus));
 
-  // Les dégradés radiaux sont centrés sur chaque joueur : un dégradé par joueur et par étape.
+  // Dégradé centré sur l'origine du cône (coordonnées locales, suit donc le joueur).
   const coneDefs = order
-    .map((role) => {
-      const [x, y] = m.positions[role];
-      return `<radialGradient id="cone-${uid}-${role}" gradientUnits="userSpaceOnUse" cx="${x}" cy="${y}" r="${CONE_RADIUS}"><stop offset="0" stop-color="${PLAYER_COLORS[role]}" stop-opacity="0.5"/><stop offset="1" stop-color="${PLAYER_COLORS[role]}" stop-opacity="0"/></radialGradient>`;
-    })
+    .map(
+      (role) =>
+        `<radialGradient id="cone-${uid}-${role}" gradientUnits="userSpaceOnUse" cx="0" cy="0" r="${CONE_RADIUS}"><stop offset="0" stop-color="${PLAYER_COLORS[role]}" stop-opacity="0.5"/><stop offset="1" stop-color="${PLAYER_COLORS[role]}" stop-opacity="0"/></radialGradient>`,
+    )
     .join('');
 
+  const deg = (role) => facing(m.positions[role], m.look[role]);
   const cones = order
-    .map((role) => `<g${dim(role)}>${cone(uid, role, m.positions[role], m.look[role])}</g>`)
+    .map(
+      (role) =>
+        `<g class="cone" data-role="${role}" transform="${placeCone(m.positions[role], deg(role))}"${dim(role)}><path d="${CONE_D}" fill="url(#cone-${uid}-${role})"/></g>`,
+    )
     .join('');
 
   const moves = m.moves
@@ -133,20 +139,16 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
 
   const players = order
     .map((role) => {
-      const [x, y] = m.positions[role];
-      const deg = (angleTo([x, y], m.look[role]) * 180) / Math.PI;
       const color = PLAYER_COLORS[role];
       // Pastille orientée : un petit bec du côté où le joueur regarde.
-      const beak = `<path d="M${x + R_PLAYER + 9},${y} L${x + R_PLAYER - 4},${y - 10} L${x + R_PLAYER - 4},${y + 10} Z" fill="${color}" stroke="${C.bg}" stroke-width="3" stroke-linejoin="round" transform="rotate(${r1(deg)} ${x} ${y})"/>`;
+      const beak = `<path class="beak" d="M${R_PLAYER + 9},0 L${R_PLAYER - 4},-10 L${R_PLAYER - 4},10 Z" fill="${color}" stroke="${C.bg}" stroke-width="3" stroke-linejoin="round" transform="${rotateBeak(deg(role))}"/>`;
       const ring =
-        role === focus
-          ? `<circle cx="${x}" cy="${y}" r="${R_PLAYER + 8}" fill="none" stroke="${C.text}" stroke-width="4"/>`
-          : '';
-      return `<g class="player" data-role="${role}"${dim(role)}>${ring}${beak}<circle cx="${x}" cy="${y}" r="${R_PLAYER}" fill="${color}" stroke="${C.bg}" stroke-width="4"/><text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="800" fill="${C.onColor}">${role.slice(1)}</text></g>`;
+        role === focus ? `<circle r="${R_PLAYER + 8}" fill="none" stroke="${C.text}" stroke-width="4"/>` : '';
+      return `<g class="player" data-role="${role}" transform="${placePlayer(m.positions[role])}"${dim(role)}>${ring}${beak}<circle r="${R_PLAYER}" fill="${color}" stroke="${C.bg}" stroke-width="4"/><text text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="800" fill="${C.onColor}">${role.slice(1)}</text></g>`;
     })
     .join('');
 
   const vb = `${VIEWBOX.x} ${VIEWBOX.y} ${VIEWBOX.width} ${VIEWBOX.height}`;
   const { width, height } = BACKGROUND;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" role="img" aria-label="Plan de Dust 2, étape ${stepN}" font-family="Inter, system-ui, sans-serif">${defs()}<defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" role="img" aria-label="Plan de ${esc(map.name)}, étape ${stepN}" font-family="Inter, system-ui, sans-serif">${defs()}<defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
 }

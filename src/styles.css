@@ -180,6 +180,37 @@ button { font: inherit; color: inherit; }
 /* En vue rôle sur téléphone, la consigne passe avant la carte : elle est lisible sans défiler. */
 body[data-view="role"] .brief { order: -1; }
 .board { margin: 0; }
+.board__stage { position: relative; }
+
+/* Animation : tracés et utilitaires masqués pendant le déplacement, puis réaffichés. */
+.board__map svg .moves,
+.board__map svg .utilities { transition: opacity 0.25s ease-out; }
+.board__map svg.is-moving .moves,
+.board__map svg.is-moving .utilities { opacity: 0; transition: none; }
+
+/* Bouton Lecture, posé sur la carte */
+.play {
+  position: absolute;
+  bottom: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--touch);
+  padding: 0 var(--space-4) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: rgba(23, 33, 43, 0.92);
+  font-weight: 700;
+  cursor: pointer;
+}
+.play__icon { width: 18px; height: 18px; fill: var(--text); }
+.play__icon--stop,
+.play[aria-pressed="true"] .play__icon--play { display: none; }
+.play[aria-pressed="true"] .play__icon--stop { display: block; }
+.play[aria-pressed="true"] { background: var(--text); color: var(--on-color); }
+.play[aria-pressed="true"] .play__icon { fill: var(--on-color); }
 .board__map svg {
   display: block;
   width: 100%;

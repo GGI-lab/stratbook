@@ -43,7 +43,8 @@ test("ouverture : lien, puis rôle mémorisé, puis vue équipe", () => {
 
 test('paramètres invalides ignorés', () => {
   assert.deepEqual(parseParams('?step=0&role=j9'), {});
-  assert.deepEqual(parseParams('?step=5'), {});
+  assert.deepEqual(parseParams('?step=6'), {});
+  assert.equal(parseParams('?step=5').step, 5);
   assert.deepEqual(parseParams('?step=2.5'), {});
   assert.deepEqual(parseParams('?step=abc&role=EQUIPE'), {});
 });
@@ -74,9 +75,10 @@ test('nettoyage des pseudos', () => {
 });
 
 test('bornes des étapes', () => {
-  assert.equal(clampStep(0), 1);
-  assert.equal(clampStep(5), 4);
-  assert.equal(clampStep(3), 3);
+  assert.equal(clampStep(0, 4), 1);
+  assert.equal(clampStep(5, 4), 4);
+  assert.equal(clampStep(3, 4), 3);
+  assert.equal(clampStep(9), 5);
 });
 
 test('stockage : lecture et écriture, et stockage indisponible sans plantage', () => {

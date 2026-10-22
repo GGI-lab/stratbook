@@ -1,11 +1,11 @@
-import strategy from '../strategies/d2-split-a.json';
+import { pickStrategy } from './strategies.js';
 import { renderStepSvg, PLAYER_COLORS } from './map/render.js';
-import { BACKGROUND } from './map/dust2.js';
+import { getMap } from './map/maps.js';
+import { animateTransition } from './map/animate.js';
 import {
   ROLES,
   TEAM,
   STEP_MIN,
-  STEP_MAX,
   NICK_MAX,
   parseParams,
   resolveInitial,
@@ -19,15 +19,20 @@ import {
 
 const $ = (id) => document.getElementById(id);
 const store = createStore(globalThis.localStorage);
-const imageHref = `${import.meta.env.BASE_URL}${BACKGROUND.href}`;
+const strategy = pickStrategy(new URLSearchParams(location.search).get('s'));
+const map = getMap(strategy.map);
+const imageHref = `${import.meta.env.BASE_URL}${map.background.href}`;
+const STEP_LAST = strategy.steps.length;
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const GROUP_LABEL = { long: 'Long', short: 'Short', all: 'Toute l’équipe' };
 
 // ---------- État ----------
 const initial = resolveInitial(parseParams(location.search), store.read());
 if (initial.adoptLinkNicknames) store.saveNicknames(initial.nicknames);
-const state = { step: initial.step, view: initial.view, nicknames: initial.nicknames };
+const state = { step: clampStep(initial.step, STEP_LAST), view: initial.view, nicknames: initial.nicknames };
 
 function setState(patch, { focusBrief = false } = {}) {
+  stopPlay(); // toute action de l'utilisateur arrête la lecture
   Object.assign(state, patch);
   if (patch.view && ROLES.includes(patch.view)) store.saveRole(patch.view);
   syncUrl();
@@ -76,10 +81,29 @@ function renderViews() {
     .join('');
 }
 
-function renderMap() {
+// ---------- Carte et animation ----------
+let shownStep = null; // étape dont les positions sont affichées
+let cancelAnim = () => {};
+
+/**
+ * Dessine la carte de l'étape courante. Si l'étape change, les joueurs glissent depuis
+ * l'étape affichée (sauts de plusieurs étapes compris), sauf si le mouvement est réduit.
+ */
+function renderMap({ from = shownStep, onDone = () => {} } = {}) {
+  cancelAnim();
   const focus = state.view === TEAM ? null : state.view;
-  $('map').innerHTML = renderStepSvg(strategy, state.step, { focus, imageHref });
+  $('map').innerHTML = renderStepSvg(strategy, state.step, { focus, imageHref, map });
   $('map-note').textContent = strategy.mapNote.text;
+  const svg = $('map').querySelector('svg');
+  const animate = from !== null && from !== state.step && !reducedMotion();
+  shownStep = state.step;
+  if (!animate) return onDone();
+  cancelAnim = animateTransition(svg, strategy, from, state.step, {
+    onDone: () => {
+      cancelAnim = () => {};
+      onDone();
+    },
+  });
 }
 
 function renderTeamBrief(step) {
@@ -119,7 +143,7 @@ function renderRoleBrief(step, role) {
 function renderBrief() {
   const step = currentStep();
   const body = state.view === TEAM ? renderTeamBrief(step) : renderRoleBrief(step, state.view);
-  $('consignes').innerHTML = `<p class="brief__step">Étape ${step.n} sur ${STEP_MAX} : ${esc(step.title.text)}</p>${body}`;
+  $('consignes').innerHTML = `<p class="brief__step">Étape ${step.n} sur ${STEP_LAST} : ${esc(step.title.text)}</p>${body}`;
 }
 
 function renderSteps() {
@@ -131,19 +155,19 @@ function renderSteps() {
     .join('');
   $('step-title').textContent = currentStep().title.text;
   $('prev').disabled = state.step <= STEP_MIN;
-  $('next').disabled = state.step >= STEP_MAX;
+  $('next').disabled = state.step >= STEP_LAST;
 }
 
-function render() {
+function render(mapOpts) {
   document.body.dataset.view = state.view === TEAM ? 'team' : 'role';
   document.title = `Étape ${state.step} · ${strategy.title.text} · Stratbook`;
   renderViews();
-  renderMap();
+  renderMap(mapOpts);
   renderBrief();
   renderSteps();
   // Annonce courte pour les lecteurs d'écran, au lieu de relire tout le volet.
   const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
-  $('announce').textContent = `Étape ${state.step} sur ${STEP_MAX}, ${who}`;
+  $('announce').textContent = `Étape ${state.step} sur ${STEP_LAST}, ${who}`;
 }
 
 // ---------- Interactions ----------
@@ -162,15 +186,53 @@ $('step-dots').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-step]');
   if (btn) setState({ step: Number(btn.dataset.step) });
 });
-$('prev').addEventListener('click', () => setState({ step: clampStep(state.step - 1) }));
-$('next').addEventListener('click', () => setState({ step: clampStep(state.step + 1) }));
+$('prev').addEventListener('click', () => setState({ step: clampStep(state.step - 1, STEP_LAST) }));
+$('next').addEventListener('click', () => setState({ step: clampStep(state.step + 1, STEP_LAST) }));
 
 // Flèches gauche et droite du clavier pour changer d'étape (hors champs de saisie).
 document.addEventListener('keydown', (e) => {
   if (e.target.closest?.('input, textarea, select')) return;
   if (document.querySelector('dialog[open]') || e.altKey || e.ctrlKey || e.metaKey) return;
-  if (e.key === 'ArrowLeft') setState({ step: clampStep(state.step - 1) });
-  if (e.key === 'ArrowRight') setState({ step: clampStep(state.step + 1) });
+  if (e.key === 'ArrowLeft') setState({ step: clampStep(state.step - 1, STEP_LAST) });
+  if (e.key === 'ArrowRight') setState({ step: clampStep(state.step + 1, STEP_LAST) });
+});
+
+// ---------- Lecture : toute la stratégie, du départ à la dernière étape ----------
+const HOLD = 900; // pause sur chaque étape (ms)
+let playing = false;
+let playTimer = 0;
+
+function updatePlayButton() {
+  const btn = $('play');
+  btn.setAttribute('aria-pressed', String(playing));
+  btn.querySelector('.play__label').textContent = playing ? 'Arrêter' : 'Lecture';
+}
+
+function stopPlay() {
+  if (!playing) return;
+  playing = false;
+  clearTimeout(playTimer);
+  updatePlayButton();
+}
+
+function playStep(n, from) {
+  state.step = n;
+  syncUrl();
+  render({
+    from,
+    onDone: () => {
+      if (!playing) return;
+      const hold = reducedMotion() ? HOLD * 2 : HOLD;
+      playTimer = setTimeout(() => (n < STEP_LAST ? playStep(n + 1, n) : stopPlay()), hold);
+    },
+  });
+}
+
+$('play').addEventListener('click', () => {
+  if (playing) return stopPlay();
+  playing = true;
+  updatePlayButton();
+  playStep(STEP_MIN, 0); // 0 = position de départ
 });
 
 // ---------- Pseudos ----------
@@ -236,4 +298,4 @@ $('share').addEventListener('click', async () => {
 });
 
 syncUrl();
-render();
+render({ from: null });

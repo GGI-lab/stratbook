@@ -17,7 +17,8 @@ Chaque envoi sur `main` publie le site via GitHub Actions.
 
 ## Organisation
 
-- `strategies/` : données des stratégies (JSON), séparées de l'interface.
+- `strategies/` : données des stratégies (JSON), détectées automatiquement. Voir `docs/ajouter-une-strategie.md`.
+- `src/map/` : cartes (image, cadrage, zones), rendu SVG et animation entre étapes.
 - `src/` : interface (JavaScript sans framework).
 - `tests/` : tests automatiques.
 

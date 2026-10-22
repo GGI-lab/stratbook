@@ -1,9 +1,6 @@
 {
   "id": "d2-split-a",
-  "map": {
-    "text": "Dust 2",
-    "source": "pdf"
-  },
+  "map": "dust2",
   "side": {
     "text": "Terro",
     "source": "pdf"
