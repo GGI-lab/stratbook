@@ -43,6 +43,13 @@ export function parseParams(search) {
   if (VIEWS.includes(role)) out.view = role;
   const nicks = ROLES.map((_, i) => cleanNickname(p.get(`n${i + 1}`)));
   if (hasNicknames(nicks)) out.nicknames = nicks;
+  const strategyId = p.get('s');
+  if (strategyId && /^[a-z0-9][a-z0-9-]{0,63}$/.test(strategyId)) out.strategyId = strategyId;
+  const side = p.get('side');
+  if (side === 't' || side === 'ct') out.side = side;
+  // Stratégie complète jointe au lien (créée ou modifiée dans l'application).
+  const data = p.get('d');
+  if (data) out.data = data;
   return out;
 }
 
@@ -61,17 +68,26 @@ export function resolveInitial(params, stored) {
   };
 }
 
-/** Construit le lien partageable de la vue courante. */
-export function buildShareUrl(baseUrl, strategyId, { step, view, nicknames }) {
+/**
+ * Construit le lien partageable de la vue courante.
+ * Sans stratégie (side sans stratégie), le lien garde le side choisi.
+ * `data` : stratégie encodée (src/codec.js), jointe quand elle n'existe que sur ce téléphone.
+ */
+export function buildShareUrl(baseUrl, strategyId, { step, view, nicknames, side }, { data } = {}) {
   const url = new URL(baseUrl);
   url.search = '';
   url.hash = '';
+  if (!strategyId) {
+    if (side) url.searchParams.set('side', side);
+    return url.toString();
+  }
   url.searchParams.set('s', strategyId);
   url.searchParams.set('step', String(step));
   url.searchParams.set('role', view);
   (nicknames ?? []).forEach((n, i) => {
     if (n) url.searchParams.set(`n${i + 1}`, n);
   });
+  if (data) url.searchParams.set('d', data);
   return url.toString();
 }
 

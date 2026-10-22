@@ -5,6 +5,11 @@
 import { getMap } from './maps.js';
 import { facing, segmentRoute } from './routes.js';
 
+// Largeur de cadrage de référence : au-delà (map entière), jetons et traits grossissent
+// pour garder la même taille à l'écran.
+const REF_WIDTH = 590;
+export const scaleFor = (frame) => Math.max(1, frame.width / REF_WIDTH);
+
 export const PLAYER_COLORS = {
   j1: '#4ADE80',
   j2: '#FB923C',
@@ -16,8 +21,8 @@ export const PLAYER_COLORS = {
 // Allure du déplacement : trait plein = avance normale, pointillés = shift (marche lente).
 export const PACE_DASH = { run: '', walk: '0.1 11' };
 
-const UTILITY_LETTER = { smoke: 'S', flash: 'F', molotov: 'M', bomb: 'C4' };
-const UTILITY_NAME = { smoke: 'Smoke', flash: 'Flash', molotov: 'Molotov', bomb: 'Bombe' };
+export const UTILITY_LETTER = { smoke: 'S', flash: 'F', molotov: 'M', bomb: 'C4' };
+export const UTILITY_NAME = { smoke: 'Smoke', flash: 'Flash', molotov: 'Molotov', bomb: 'Bombe' };
 
 const C = {
   bg: '#0F1720',
@@ -60,8 +65,17 @@ const H = (CONE_HALF_ANGLE * Math.PI) / 180;
 const CONE_D = `M0,0 L${r1(CONE_RADIUS * Math.cos(H))},${r1(-CONE_RADIUS * Math.sin(H))} A${CONE_RADIUS},${CONE_RADIUS} 0 0 1 ${r1(CONE_RADIUS * Math.cos(H))},${r1(CONE_RADIUS * Math.sin(H))} Z`;
 
 /** Transformations qui placent un joueur et son cône (utilisées aussi par l'animation). */
-export const placePlayer = ([x, y]) => `translate(${r1(x)} ${r1(y)})`;
-export const placeCone = ([x, y], deg) => `translate(${r1(x)} ${r1(y)}) rotate(${r1(deg)})`;
+const sc = (k) => (k && k !== 1 ? ` scale(${r1(k * 100) / 100})` : '');
+export const placePlayer = ([x, y], k = 1) => `translate(${r1(x)} ${r1(y)})${sc(k)}`;
+export const placeCone = ([x, y], deg, k = 1) => `translate(${r1(x)} ${r1(y)}) rotate(${r1(deg)})${sc(k)}`;
+
+/** Position d'un utilitaire : point libre (`at`) ou zone nommée décalée de dx, dy. */
+export function utilityPoint(u, zoneById) {
+  if (u.at) return u.at;
+  const z = zoneById[u.zone];
+  if (!z) throw new Error(`Zone inconnue : ${u.zone}`);
+  return [z.anchor[0] + (u.dx ?? 0), z.anchor[1] + (u.dy ?? 0)];
+}
 
 /**
  * @param {object} strategy  données de la stratégie (JSON)
@@ -70,21 +84,27 @@ export const placeCone = ([x, y], deg) => `translate(${r1(x)} ${r1(y)}) rotate($
  * @param {string|null} [opts.focus]  rôle mis en avant (j1..j5), null = vue équipe
  * @param {string} [opts.imageHref]   URL de l'image de fond
  * @param {object} [opts.map]         carte (par défaut celle de la stratégie)
+ * @param {object} [opts.frame]       cadrage (par défaut celui de la stratégie, sinon la carte entière)
+ * @param {string|null} [opts.highlight] rôle entouré sans atténuer les autres (éditeur)
+ * @param {string} [opts.uid]         préfixe des identifiants internes (plusieurs cartes dans la page)
  */
 export function renderStepSvg(strategy, stepN, opts = {}) {
   const focus = opts.focus ?? null;
   const map = opts.map ?? getMap(strategy.map);
-  const { background: BACKGROUND, viewBox: VIEWBOX } = map;
+  const BACKGROUND = map.background;
+  const VIEWBOX = opts.frame ?? strategy.frame ?? map.viewBox;
+  const k = scaleFor(VIEWBOX);
   const zoneById = Object.fromEntries(map.zones.map((z) => [z.id, z]));
   const href = opts.imageHref ?? BACKGROUND.href;
   const step = strategy.steps.find((s) => s.n === stepN);
   if (!step) throw new Error(`Étape ${stepN} introuvable`);
   const m = step.map;
   // Identifiant unique pour que plusieurs cartes puissent cohabiter dans une même page.
-  const uid = `s${stepN}-${focus ?? 'equipe'}`;
+  const uid = `${opts.uid ?? 's'}${stepN}-${focus ?? 'equipe'}`;
+  const ringRole = opts.highlight ?? focus;
   const dim = (role) => (focus && role !== focus ? ' opacity="0.28"' : '');
   // Joueur sélectionné dessiné en dernier pour rester au-dessus.
-  const order = Object.keys(m.positions).sort((a, b) => (a === focus) - (b === focus));
+  const order = Object.keys(m.positions).sort((a, b) => (a === ringRole) - (b === ringRole));
 
   // Dégradé centré sur l'origine du cône (coordonnées locales, suit donc le joueur).
   const coneDefs = order
@@ -95,10 +115,11 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
     .join('');
 
   const deg = (role) => facing(m.positions[role], m.look[role]);
+  const dash = (pace) => (pace === 'walk' ? `0.1 ${r1(11 * k)}` : '');
   const cones = order
     .map(
       (role) =>
-        `<g class="cone" data-role="${role}" transform="${placeCone(m.positions[role], deg(role))}"${dim(role)}><path d="${CONE_D}" fill="url(#cone-${uid}-${role})"/></g>`,
+        `<g class="cone" data-role="${role}" transform="${placeCone(m.positions[role], deg(role), k)}"${dim(role)}><path d="${CONE_D}" fill="url(#cone-${uid}-${role})"/></g>`,
     )
     .join('');
 
@@ -106,18 +127,18 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
   const moves = m.moves
     .map(({ role, pace = 'run' }) => {
       const d = smoothPath(segmentRoute(strategy, stepN, role));
-      return `<g class="move" data-role="${role}" data-pace="${pace}"${dim(role)}><path d="${d}" fill="none" stroke="${C.bg}" stroke-width="${STROKE + 4}" stroke-linecap="round" stroke-dasharray="${PACE_DASH[pace]}" opacity="0.7"/><path d="${d}" fill="none" stroke="${PLAYER_COLORS[role]}" stroke-width="${STROKE}" stroke-linecap="round" stroke-dasharray="${PACE_DASH[pace]}"/></g>`;
+      return `<g class="move" data-role="${role}" data-pace="${pace}"${dim(role)}><path d="${d}" fill="none" stroke="${C.bg}" stroke-width="${r1((STROKE + 4) * k)}" stroke-linecap="round" stroke-dasharray="${dash(pace)}" opacity="0.7"/><path d="${d}" fill="none" stroke="${PLAYER_COLORS[role]}" stroke-width="${r1(STROKE * k)}" stroke-linecap="round" stroke-dasharray="${dash(pace)}"/></g>`;
     })
     .join('');
 
   const utils = m.utilities
-    .map(({ type, by, zone, dx = 0, dy = 0 }) => {
-      const z = zoneById[zone];
-      if (!z) throw new Error(`Zone inconnue : ${zone}`);
-      const [x, y] = [z.anchor[0] + dx, z.anchor[1] + dy];
+    .map((u, i) => {
+      const { type, by } = u;
+      const [x, y] = utilityPoint(u, zoneById);
+      const where = u.zone ? ` : ${zoneById[u.zone].name}` : '';
       const letter = UTILITY_LETTER[type];
-      const r = letter.length > 1 ? R_UTIL + 3 : R_UTIL;
-      return `<g${dim(by)}><title>${esc(`${UTILITY_NAME[type]} (${by.toUpperCase()}) : ${z.name}`)}</title><circle cx="${x}" cy="${y}" r="${r}" fill="${C.surface}" stroke="${PLAYER_COLORS[by]}" stroke-width="4"/><text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="${letter.length > 1 ? 14 : 18}" font-weight="800" fill="${C.text}">${letter}</text></g>`;
+      const r = r1((letter.length > 1 ? R_UTIL + 3 : R_UTIL) * k);
+      return `<g class="utility" data-index="${i}"${dim(by)}><title>${esc(`${UTILITY_NAME[type]} (${by.toUpperCase()})${where}`)}</title><circle cx="${x}" cy="${y}" r="${r}" fill="${C.surface}" stroke="${PLAYER_COLORS[by]}" stroke-width="${r1(4 * k)}"/><text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" font-size="${r1((letter.length > 1 ? 14 : 18) * k)}" font-weight="800" fill="${C.text}">${letter}</text></g>`;
     })
     .join('');
 
@@ -125,12 +146,12 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
     .map((role) => {
       const color = PLAYER_COLORS[role];
       const ring =
-        role === focus ? `<circle r="${R_PLAYER + 8}" fill="none" stroke="${C.text}" stroke-width="4"/>` : '';
-      return `<g class="player" data-role="${role}" transform="${placePlayer(m.positions[role])}"${dim(role)}>${ring}<circle r="${R_PLAYER}" fill="${color}" stroke="${C.bg}" stroke-width="4"/><text text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="800" fill="${C.onColor}">${role.slice(1)}</text></g>`;
+        role === ringRole ? `<circle r="${R_PLAYER + 8}" fill="none" stroke="${C.text}" stroke-width="4"/>` : '';
+      return `<g class="player" data-role="${role}" transform="${placePlayer(m.positions[role], k)}"${dim(role)}>${ring}<circle r="${R_PLAYER}" fill="${color}" stroke="${C.bg}" stroke-width="4"/><text text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="800" fill="${C.onColor}">${role.slice(1)}</text></g>`;
     })
     .join('');
 
   const vb = `${VIEWBOX.x} ${VIEWBOX.y} ${VIEWBOX.width} ${VIEWBOX.height}`;
   const { width, height } = BACKGROUND;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" role="img" aria-label="Plan de ${esc(map.name)}, étape ${stepN}" font-family="Inter, system-ui, sans-serif"><defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" data-k="${k}" role="img" aria-label="Plan de ${esc(map.name)}, étape ${stepN}" font-family="Inter, system-ui, sans-serif"><defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
 }

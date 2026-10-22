@@ -13,8 +13,9 @@ const DOUBLE_TAP_MS = 300;
 /**
  * @param {HTMLElement} container  élément qui contient le SVG (remplacé à chaque rendu)
  * @param {{x:number,y:number,width:number,height:number}} base  cadrage complet de la carte
+ * @param {{touchAction?: string}} [opts]  touchAction : valeur imposée (éditeur : 'none', le doigt déplace les jetons)
  */
-export function attachZoom(container, base) {
+export function attachZoom(container, base, opts = {}) {
   let view = { ...base }; // cadrage courant (x, y, width, height)
   const pointers = new Map();
   let gesture = null;
@@ -36,7 +37,7 @@ export function attachZoom(container, base) {
     const el = svg();
     if (el) el.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
     // Vue entière : le doigt fait défiler la page. Zoomée : le doigt déplace la carte.
-    container.style.touchAction = scale() > 1.01 ? 'none' : 'pan-y';
+    container.style.touchAction = opts.touchAction ?? (scale() > 1.01 ? 'none' : 'pan-y');
     container.dataset.zoomed = String(scale() > 1.01);
   }
 
@@ -148,5 +149,15 @@ export function attachZoom(container, base) {
     { passive: false },
   );
 
-  return { apply, reset: () => ((view = { ...base }), apply()), scale };
+  return {
+    apply,
+    reset: () => ((view = { ...base }), apply()),
+    scale,
+    /** Nouveau cadrage complet (autre stratégie) : retour à la vue entière. */
+    setBase(next) {
+      base = { ...next };
+      view = { ...base };
+      apply();
+    },
+  };
 }

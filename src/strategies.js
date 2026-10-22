@@ -1,5 +1,6 @@
-// Registre des stratégies : tout fichier JSON déposé dans strategies/ est pris en compte.
+// Stratégies du dépôt : tout fichier JSON déposé dans strategies/ est pris en compte.
 // L'id de la stratégie (champ "id") est celui du lien de partage (?s=...).
+// Les stratégies créées dans l'application sont gérées par src/library.js.
 const files = import.meta.glob('../strategies/*.json', { eager: true, import: 'default' });
 
 export const STRATEGIES = Object.fromEntries(Object.values(files).map((s) => [s.id, s]));

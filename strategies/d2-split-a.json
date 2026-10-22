@@ -1,6 +1,12 @@
 {
   "id": "d2-split-a",
   "map": "dust2",
+  "frame": {
+    "x": 360,
+    "y": 20,
+    "width": 590,
+    "height": 940
+  },
   "side": {
     "text": "Terro",
     "source": "pdf"

@@ -12,9 +12,13 @@ const stepOf = (strategy, n) => strategy.steps.find((s) => s.n === n);
 export const firstStep = (strategy) => strategy.steps[0].n;
 export const lastStep = (strategy) => strategy.steps.at(-1).n;
 
-/** Position de chaque joueur à la fin de l'étape n (n = 0 : départ). */
+/**
+ * Position de chaque joueur à la fin de l'étape n (n = 0 : départ).
+ * Départ : champ `start` s'il existe (stratégies de l'éditeur), sinon début du tracé de l'étape 1.
+ */
 export function positionAt(strategy, n, role) {
   if (n === 0) {
+    if (strategy.start?.[role]) return strategy.start[role];
     const s1 = strategy.steps[0].map;
     const move = s1.moves.find((m) => m.role === role);
     return move ? move.path[0] : s1.positions[role];

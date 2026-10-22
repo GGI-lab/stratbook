@@ -4,20 +4,26 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0F1720" />
-    <meta name="description" content="Playbook de l'équipe : Dust 2, côté terro, Split A (3 Long + 2 Short)." />
-    <title>Stratbook · Dust 2 Terro</title>
+    <meta name="description" content="Playbook de l'équipe : stratégies CS2 sur Dust 2, côté terro et CT." />
+    <title>Stratbook · Dust 2</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
-  <body>
+  <body data-mode="view">
     <a class="skip" href="#consignes">Aller aux consignes</a>
 
     <header class="top">
       <div class="top__titles">
         <p class="top__map" id="map-label">Dust 2 · Terro</p>
-        <h1 class="top__title" id="strat-title">Split A, 3 Long + 2 Short</h1>
+        <h1 class="top__title" id="strat-title">Stratbook</h1>
       </div>
       <div class="top__actions">
         <!-- Icônes dessinées pour le projet, dans l'esprit d'iOS (les SF Symbols d'Apple ne sont pas utilisables sur le web). -->
+        <button type="button" class="icon-btn" id="open-list" aria-haspopup="true" aria-expanded="false" aria-controls="strat-menu" aria-label="Stratégies" title="Stratégies">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle class="fill" cx="5" cy="6.5" r="1.4" /><circle class="fill" cx="5" cy="12" r="1.4" /><circle class="fill" cx="5" cy="17.5" r="1.4" /><path d="M9.5 6.5h10M9.5 12h10M9.5 17.5h10" /></svg>
+        </button>
+        <button type="button" class="icon-btn side-btn" id="side" data-side="t" aria-label="Side : Terro. Passer côté CT" title="Changer de side">
+          <span class="side-btn__label" aria-hidden="true">T</span>
+        </button>
         <button type="button" class="icon-btn" id="open-nicks" aria-haspopup="dialog" aria-label="Pseudos" title="Pseudos">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" /><circle cx="12" cy="9.6" r="3.3" /><path d="M6.2 18.4c1.3-2.5 3.4-3.8 5.8-3.8s4.5 1.3 5.8 3.8" /></svg>
         </button>
@@ -25,9 +31,25 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14.5V3.5M8 7.2l4-3.9 4 3.9" /><path d="M8.5 10H7a1.5 1.5 0 0 0-1.5 1.5v8A1.5 1.5 0 0 0 7 21h10a1.5 1.5 0 0 0 1.5-1.5v-8A1.5 1.5 0 0 0 17 10h-1.5" /></svg>
         </button>
       </div>
+
+      <!-- Menu déroulant des stratégies du side choisi -->
+      <div class="menu" id="strat-menu" hidden>
+        <p class="menu__head" id="menu-head">Stratégies</p>
+        <ul class="menu__list" id="menu-list" aria-labelledby="menu-head"></ul>
+        <div class="menu__actions">
+          <button type="button" class="menu__action" id="menu-new">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            <span id="menu-new-label">Nouvelle stratégie</span>
+          </button>
+          <button type="button" class="menu__action" id="menu-edit">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M13.5 6.5l4 4" /></svg>
+            <span>Modifier cette stratégie</span>
+          </button>
+        </div>
+      </div>
     </header>
 
-    <div class="controls">
+    <div class="controls" id="controls">
       <nav class="views" aria-label="Choix de la vue">
         <div class="views__row" id="views"></div>
       </nav>
@@ -42,7 +64,7 @@
       </nav>
     </div>
 
-    <main class="layout">
+    <main class="layout" id="layout">
       <figure class="board">
         <div class="board__stage">
           <button type="button" class="play" id="play" aria-pressed="false" aria-describedby="play-hint">
@@ -58,6 +80,22 @@
       <section class="brief" id="consignes" aria-label="Consignes" tabindex="-1"></section>
     </main>
 
+    <!-- Side sans stratégie -->
+    <main class="empty" id="empty" hidden>
+      <p class="empty__text" id="empty-text">Aucune stratégie pour l'instant.</p>
+      <button type="button" class="btn btn--primary" id="empty-new">Créer une stratégie</button>
+    </main>
+
+    <!-- Éditeur de stratégie (création et modification) -->
+    <section class="editor" id="editor" hidden aria-labelledby="editor-title">
+      <header class="editor__bar">
+        <button type="button" class="btn btn--ghost" id="ed-cancel">Annuler</button>
+        <h1 class="editor__title" id="editor-title">Nouvelle stratégie</h1>
+        <button type="button" class="btn btn--primary" id="ed-save">Enregistrer</button>
+      </header>
+      <div class="editor__body" id="editor-body"></div>
+    </section>
+
     <dialog class="nicks" id="nicks-dialog" aria-labelledby="nicks-title">
       <form method="dialog" class="nicks__form" id="nicks-form">
         <h2 id="nicks-title">Pseudos de l'équipe</h2>
@@ -66,6 +104,18 @@
         <div class="nicks__actions">
           <button type="button" class="btn btn--ghost" id="nicks-cancel">Annuler</button>
           <button type="submit" class="btn btn--primary" value="save">Enregistrer</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Confirmation (quitter sans enregistrer, supprimer) -->
+    <dialog class="nicks confirm" id="confirm-dialog" aria-labelledby="confirm-title">
+      <form method="dialog" class="nicks__form">
+        <h2 id="confirm-title">Confirmer</h2>
+        <p class="nicks__hint" id="confirm-text"></p>
+        <div class="nicks__actions">
+          <button type="submit" class="btn btn--ghost" value="cancel" id="confirm-no">Annuler</button>
+          <button type="submit" class="btn btn--primary" value="ok" id="confirm-yes">Confirmer</button>
         </div>
       </form>
     </dialog>

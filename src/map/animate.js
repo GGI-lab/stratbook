@@ -16,8 +16,9 @@ import {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function setPose(svg, role, pos, deg) {
-  svg.querySelector(`.player[data-role="${role}"]`)?.setAttribute('transform', placePlayer(pos));
-  svg.querySelector(`.cone[data-role="${role}"]`)?.setAttribute('transform', placeCone(pos, deg));
+  const k = Number(svg.dataset.k) || 1; // échelle des jetons (cadrage large = jetons plus grands)
+  svg.querySelector(`.player[data-role="${role}"]`)?.setAttribute('transform', placePlayer(pos, k));
+  svg.querySelector(`.cone[data-role="${role}"]`)?.setAttribute('transform', placeCone(pos, deg, k));
 }
 
 /**

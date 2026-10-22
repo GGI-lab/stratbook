@@ -8,7 +8,7 @@ import { MAPS } from '../src/map/maps.js';
 const DIR = new URL('../strategies/', import.meta.url);
 const ROLES = ['j1', 'j2', 'j3', 'j4', 'j5'];
 const UTILITY_TYPES = new Set(['smoke', 'flash', 'molotov', 'bomb']);
-const GROUPS = new Set(['long', 'short', 'mid', 'b', 'all']);
+const GROUPS = new Set(['long', 'short', 'mid', 'a', 'b', 'all']);
 const NEAR = 60; // px : un tracé doit partir de la position précédente et finir près de la nouvelle
 
 const files = readdirSync(DIR).filter((f) => f.endsWith('.json'));
@@ -68,7 +68,8 @@ for (const f of files) {
         assert.equal(m.look[r]?.length, 2, `étape ${st.n}, ${r} : regard`);
       }
       for (const u of m.utilities) {
-        assert.ok(UTILITY_TYPES.has(u.type) && ROLES.includes(u.by) && zones.has(u.zone), `étape ${st.n} : ${JSON.stringify(u)}`);
+        const placed = Array.isArray(u.at) ? inFrame(u.at) : zones.has(u.zone); // point libre (éditeur) ou zone nommée
+        assert.ok(UTILITY_TYPES.has(u.type) && ROLES.includes(u.by) && placed, `étape ${st.n} : ${JSON.stringify(u)}`);
       }
       for (const mv of m.moves) {
         assert.ok(ROLES.includes(mv.role) && mv.path.length >= 2, `étape ${st.n} : tracé ${mv.role}`);

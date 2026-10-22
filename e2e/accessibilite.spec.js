@@ -39,3 +39,19 @@ test('zones tactiles de 44 px minimum', async ({ page }) => {
   );
   expect(small).toEqual([]);
 });
+
+test('axe : menu des stratégies ouvert et éditeur', async ({ page }) => {
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Stratégies' }).click();
+  let { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  await page.getByRole('button', { name: 'Modifier cette stratégie' }).click();
+  ({ violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze());
+  expect(violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+});
+
+test('axe : side CT sans stratégie', async ({ page }) => {
+  await page.goto('./?side=ct');
+  const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  expect(violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+});
