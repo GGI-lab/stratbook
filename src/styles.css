@@ -161,9 +161,9 @@ button { font: inherit; color: inherit; }
 .view--team { flex-direction: row; gap: 0; }
 /* Cinq personnages qui se chevauchent : l'équipe */
 .team-icon {
-  width: 13px;
-  height: 18px;
-  margin-left: -3px;
+  width: 18px;   /* +40 % */
+  height: 25px;
+  margin-left: -7.5px; /* chevauchement pour tenir dans le bouton sur téléphone */
   flex-shrink: 0;
 }
 .team-icon:first-child { margin-left: 0; }
@@ -329,6 +329,7 @@ button { font: inherit; color: inherit; }
 .steps {
   display: flex;
   align-items: center;
+  justify-content: center; /* flèches collées aux chiffres */
   gap: var(--space-2);
   max-width: 640px;
 }
@@ -348,17 +349,8 @@ button { font: inherit; color: inherit; }
 }
 .steps__arrow svg { width: 18px; height: 18px; fill: none; stroke: var(--text); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
 .steps__arrow:disabled { opacity: 0.35; cursor: default; }
-.steps__center { flex: 1; display: grid; justify-items: center; gap: 2px; min-width: 0; }
 .steps__dots { display: flex; gap: var(--space-2); }
 .dot[aria-current="step"] { background: var(--text); color: var(--on-color); border-color: var(--text); }
-.steps__title {
-  font-size: 13px;
-  color: var(--text-muted);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* ---------- Panneau pseudos ---------- */
 .nicks {

@@ -160,7 +160,6 @@ function renderSteps() {
         `<li><button type="button" class="dot" data-step="${s.n}" ${s.n === state.step ? 'aria-current="step"' : ''} aria-label="Étape ${s.n} : ${esc(s.title.text)}">${s.n}</button></li>`,
     )
     .join('');
-  $('step-title').textContent = currentStep().title.text;
   $('prev').disabled = state.step <= STEP_MIN;
   $('next').disabled = state.step >= STEP_LAST;
 }
