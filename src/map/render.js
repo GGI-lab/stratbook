@@ -34,6 +34,9 @@ const C = {
 // Tailles en pixels de l'image (cadrage 600 de large, affiché ~360 px sur téléphone).
 const R_PLAYER = 19;
 const R_UTIL = 17;
+// Zone de toucher invisible autour d'un jeton : environ 44 px à l'écran sur téléphone
+// (le jeton dessiné, lui, ne fait que 12 à 20 px).
+export const R_HIT = 40;
 const STROKE = 5;
 const CONE_RADIUS = 150;
 const CONE_HALF_ANGLE = 32; // degrés, cône de 64°
@@ -88,6 +91,7 @@ export function utilityPoint(u, zoneById) {
  * @param {string|null} [opts.highlight] rôle entouré sans atténuer les autres (éditeur)
  * @param {string} [opts.uid]         préfixe des identifiants internes (plusieurs cartes dans la page)
  * @param {boolean} [opts.recap]      récap : positions de l'étape stepN, trajets et utilitaires de toutes les étapes
+ * @param {boolean} [opts.hitArea]    zone de toucher élargie autour des jetons (désactivée dans l'éditeur)
  */
 export function renderStepSvg(strategy, stepN, opts = {}) {
   const focus = opts.focus ?? null;
@@ -101,6 +105,7 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
   if (!step) throw new Error(`Étape ${stepN} introuvable`);
   const m = step.map;
   const recap = Boolean(opts.recap);
+  const hit = opts.hitArea !== false ? `<circle class="player__hit" r="${R_HIT}" fill="transparent"/>` : '';
   // Récap : tous les trajets (chacun avec l'étape qui le définit) et tous les utilitaires.
   const shown = recap ? strategy.steps.filter((s) => s.n <= stepN) : [step];
   const allMoves = shown.flatMap((s) => s.map.moves.map((mv) => ({ ...mv, n: s.n })));
@@ -153,7 +158,7 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
       const color = PLAYER_COLORS[role];
       const ring =
         role === ringRole ? `<circle r="${R_PLAYER + 8}" fill="none" stroke="${C.text}" stroke-width="4"/>` : '';
-      return `<g class="player" data-role="${role}" transform="${placePlayer(m.positions[role], k)}"${dim(role)}>${ring}<circle r="${R_PLAYER}" fill="${color}" stroke="${C.bg}" stroke-width="4"/><text text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="800" fill="${C.onColor}">${role.slice(1)}</text></g>`;
+      return `<g class="player" data-role="${role}" transform="${placePlayer(m.positions[role], k)}"${dim(role)}>${hit}${ring}<circle r="${R_PLAYER}" fill="${color}" stroke="${C.bg}" stroke-width="4"/><text text-anchor="middle" dominant-baseline="central" font-size="22" font-weight="800" fill="${C.onColor}">${role.slice(1)}</text></g>`;
     })
     .join('');
 

@@ -1,39 +1,12 @@
 import { test, expect } from '@playwright/test';
+import { dragToken, dragVia, tapMap, skipInstallPrompt } from './helpers.js';
 
 const header = (page) => page.locator('header.top');
 const brief = (page) => page.locator('#consignes');
 
-// Glisse un jeton de l'éditeur vers un point de la carte (pixels de l'image).
-// Les événements pointeur sont envoyés comme un doigt (touch) sur iPhone et Android, souris sur ordinateur.
-async function dragToken(page, role, to) {
-  await page.locator('#ed-map').scrollIntoViewIfNeeded();
-  const { from, dest } = await page.locator('#ed-map svg').evaluate((s, [role, to]) => {
-    const g = s.querySelector(`.ed-hit[data-role="${role}"]`);
-    const screen = (x, y) => {
-      const p = new DOMPoint(x, y).matrixTransform(s.getScreenCTM());
-      return [p.x, p.y];
-    };
-    return { from: screen(+g.getAttribute('cx'), +g.getAttribute('cy')), dest: screen(...to) };
-  }, [role, to]);
-  const hit = page.locator(`#ed-map .ed-hit[data-role="${role}"]`);
-  const opts = (x, y) => ({ pointerId: 7, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true, button: 0 });
-  await hit.dispatchEvent('pointerdown', opts(...from));
-  for (let k = 1; k <= 5; k++) {
-    const x = from[0] + ((dest[0] - from[0]) * k) / 5;
-    const y = from[1] + ((dest[1] - from[1]) * k) / 5;
-    await page.locator('#ed-map').dispatchEvent('pointermove', opts(x, y));
-  }
-  await page.locator('#ed-map').dispatchEvent('pointerup', opts(...dest));
-}
-
-async function tapMap(page, point) {
-  await page.locator('#ed-map').scrollIntoViewIfNeeded();
-  const [x, y] = await page.locator('#ed-map svg').evaluate((s, [x, y]) => {
-    const p = new DOMPoint(x, y).matrixTransform(s.getScreenCTM());
-    return [p.x, p.y];
-  }, point);
-  await page.locator('#ed-map svg').dispatchEvent('pointerdown', { pointerId: 9, pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true, button: 0 });
-}
+test.beforeEach(async ({ context }) => {
+  await skipInstallPrompt(context);
+});
 
 test('en-tête : boutons Stratégies, side, Pseudos, Partager, de même taille et dans cet ordre', async ({ page }) => {
   await page.goto('./');
@@ -160,4 +133,112 @@ test('éditeur : aucun défilement horizontal', async ({ page }) => {
   await page.getByRole('button', { name: 'Nouvelle stratégie T' }).click();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// ---------- Défaire / Refaire ----------
+const savedStrategies = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('stratbook:strategies') ?? '{}'));
+
+test('défaire et refaire : déplacement de joueur, utilitaire, texte', async ({ page }) => {
+  await page.goto('./?side=ct');
+  await page.getByRole('button', { name: 'Créer une stratégie CT' }).click();
+  const undo = page.getByRole('button', { name: 'Défaire' });
+  const redo = page.getByRole('button', { name: 'Refaire' });
+  await expect(undo).toBeDisabled();
+  await expect(redo).toBeDisabled();
+
+  // Déplacement : défait puis refait.
+  await dragToken(page, 'j1', [150, 200]);
+  await expect(page.locator('#ed-map .move[data-role="j1"]')).toHaveCount(1);
+  await undo.click();
+  await expect(page.locator('#ed-map .move[data-role="j1"]')).toHaveCount(0);
+  await expect(redo).toBeEnabled();
+  await redo.click();
+  await expect(page.locator('#ed-map .move[data-role="j1"]')).toHaveCount(1);
+
+  // Utilitaire posé puis défait.
+  await page.getByRole('button', { name: 'Smoke', exact: true }).click();
+  await tapMap(page, [260, 200]);
+  await expect(page.locator('#ed-map .utility')).toHaveCount(1);
+  await undo.click();
+  await expect(page.locator('#ed-map .utility')).toHaveCount(0);
+
+  // Texte : une frappe continue compte pour une seule action.
+  await page.getByLabel('Titre de la stratégie').pressSequentially('Retake');
+  await undo.click();
+  await expect(page.getByLabel('Titre de la stratégie')).toHaveValue('');
+  // Une nouvelle action efface ce qui pouvait être refait.
+  await dragToken(page, 'j2', [180, 260]);
+  await expect(redo).toBeDisabled();
+});
+
+test('défaire au clavier (Ctrl+Z) hors des champs de texte', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.name.startsWith('desktop'), 'Raccourci clavier : ordinateur');
+  await page.goto('./?side=ct');
+  await page.getByRole('button', { name: 'Créer une stratégie CT' }).click();
+  await dragToken(page, 'j1', [150, 200]);
+  await expect(page.locator('#ed-map .move[data-role="j1"]')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Ajouter une étape' }).focus();
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#ed-map .move[data-role="j1"]')).toHaveCount(0);
+  await page.keyboard.press('Control+Shift+z');
+  await expect(page.locator('#ed-map .move[data-role="j1"]')).toHaveCount(1);
+});
+
+// ---------- Point de passage ----------
+test('point de passage : imposer Mid plutôt que le plus court chemin, puis le retirer', async ({ page }) => {
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Stratégies' }).click();
+  await page.getByRole('button', { name: 'Nouvelle stratégie T' }).click();
+  await page.getByLabel('Titre de la stratégie').fill('Passage Mid');
+  // J1 va au bout de Long ; le losange apparaît sur son trajet (joueur choisi).
+  await dragToken(page, 'j1', [895, 300]);
+  await expect(page.locator('#ed-map .ed-via')).toHaveCount(1);
+  await expect(page.locator('#ed-map .ed-via.is-set')).toHaveCount(0);
+  const before = await page.locator('#ed-map .move[data-role="j1"] path').first().getAttribute('d');
+
+  // Losange glissé à Mid : le trajet passe par là.
+  await dragVia(page, [462, 520]);
+  await expect(page.locator('#ed-map .ed-via.is-set')).toHaveCount(1);
+  const after = await page.locator('#ed-map .move[data-role="j1"] path').first().getAttribute('d');
+  expect(after).not.toBe(before);
+  await page.getByRole('button', { name: 'Enregistrer' }).click();
+  const saved = Object.values(await savedStrategies(page)).find((s) => s.title.text === 'Passage Mid');
+  const move = saved.steps[0].map.moves.find((m) => m.role === 'j1');
+  expect(move.via).toHaveLength(1);
+  const [vx, vy] = move.via[0];
+  expect(Math.hypot(vx - 462, vy - 520)).toBeLessThan(30);
+  expect(move.path.some(([x, y]) => x === vx && y === vy)).toBe(true);
+
+  // Retirer le point de passage : retour au plus court chemin.
+  await page.getByRole('button', { name: 'Stratégies' }).click();
+  await page.getByRole('button', { name: 'Modifier cette stratégie' }).click();
+  await page.locator('#ed-map .ed-hit[data-role="j1"]').dispatchEvent('pointerdown', { pointerId: 3, pointerType: 'touch', isPrimary: true, bubbles: true, button: 0 });
+  await page.locator('#ed-map').dispatchEvent('pointerup', { pointerId: 3, pointerType: 'touch', isPrimary: true, bubbles: true, button: 0 });
+  await page.getByRole('button', { name: 'Retirer le point de passage' }).click();
+  await expect(page.locator('#ed-map .ed-via.is-set')).toHaveCount(0);
+  expect(await page.locator('#ed-map .move[data-role="j1"] path').first().getAttribute('d')).toBe(before);
+});
+
+// ---------- Carte visible pendant la saisie (téléphone) ----------
+test('téléphone : la carte reste en haut pendant la saisie des missions', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name.startsWith('desktop'), 'Ordinateur : carte et consignes côte à côte');
+  await page.goto('./');
+  await page.getByRole('button', { name: 'Stratégies' }).click();
+  await page.getByRole('button', { name: 'Modifier cette stratégie' }).click();
+  const field = page.locator('#ed-m-j5');
+  await field.scrollIntoViewIfNeeded();
+  await field.click();
+  await field.fill('Garde l’arrière de Short');
+  const stage = await page.locator('#ed-stage').boundingBox();
+  const bar = await page.locator('.editor__bar').boundingBox();
+  const input = await field.boundingBox();
+  // Carte collée sous la barre de l'éditeur, entièrement visible, et le champ n'est pas dessous.
+  expect(Math.abs(stage.y - (bar.y + bar.height))).toBeLessThan(2);
+  expect(stage.height).toBeGreaterThan(150);
+  expect(input.y).toBeGreaterThanOrEqual(stage.y + stage.height - 1);
+  // Plus bas, la section des rôles fait défiler la carte (elle ne colle que dans « Étapes et placement »).
+  await page.getByRole('heading', { name: 'Rôles des joueurs' }).scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollBy(0, 400));
+  const later = await page.locator('#ed-stage').boundingBox();
+  expect(later.y).toBeLessThan(bar.y + bar.height - 50);
 });

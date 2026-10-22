@@ -15,7 +15,11 @@ import {
   validateDraft,
   finalizeDraft,
   movesDuring,
+  setVia,
+  clearVia,
+  routeMidpoint,
 } from '../src/editor/ops.js';
+import { createHistory } from '../src/editor/history.js';
 
 const splitA = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
 const ROLES = ['j1', 'j2', 'j3', 'j4', 'j5'];
@@ -129,4 +133,79 @@ test('la stratégie du dépôt reste identique si on ne touche à rien', () => {
   const s = finalizeDraft(prepareDraft(splitA), DUST2);
   for (const st of splitA.steps) assert.deepEqual(s.steps[st.n - 1].map, st.map);
   for (const r of ROLES) assert.ok(dist(s.start[r], positionAt(splitA, 0, r)) === 0);
+});
+
+// ---------- Points de passage ----------
+
+const near = (path, [x, y], d = 1) => path.some(([px, py]) => Math.hypot(px - x, py - y) <= d);
+
+test('point de passage : le trajet passe par lui, le regard suit la fin du trajet', () => {
+  const d = createStrategy({ side: 't' });
+  setPosition(d, DUST2, 1, 'j1', [895, 300]);
+  const direct = structuredClone(d.steps[0].map.moves.find((m) => m.role === 'j1').path);
+  assert.ok(setVia(d, DUST2, 1, 'j1', [462, 520]));
+  const move = d.steps[0].map.moves.find((m) => m.role === 'j1');
+  assert.equal(move.via.length, 1);
+  assert.ok(near(move.path, move.via[0], 0), 'le point de passage est sur le trajet');
+  assert.ok(Math.hypot(move.via[0][0] - 462, move.via[0][1] - 520) < 30, 'ramené dans un couloir, près du point voulu');
+  assert.notDeepEqual(move.path, direct);
+  assert.deepEqual(move.path[0], d.start.j1);
+  assert.deepEqual(move.path.at(-1), d.steps[0].map.positions.j1);
+  assertContinuous(d);
+});
+
+test("point de passage : gardé quand on déplace l'arrivée, retiré à la demande", () => {
+  const d = createStrategy({ side: 't' });
+  setPosition(d, DUST2, 1, 'j1', [895, 300]);
+  const direct = structuredClone(d.steps[0].map.moves.find((m) => m.role === 'j1').path);
+  setVia(d, DUST2, 1, 'j1', [462, 520]);
+  const via = structuredClone(d.steps[0].map.moves.find((m) => m.role === 'j1').via);
+  setPosition(d, DUST2, 1, 'j1', [880, 280]);
+  const moved = d.steps[0].map.moves.find((m) => m.role === 'j1');
+  assert.deepEqual(moved.via, via);
+  assert.ok(near(moved.path, via[0], 0));
+  setPosition(d, DUST2, 1, 'j1', [895, 300]);
+  assert.ok(clearVia(d, DUST2, 1, 'j1'));
+  const back = d.steps[0].map.moves.find((m) => m.role === 'j1');
+  assert.equal('via' in back, false);
+  assert.deepEqual(back.path, direct, 'retour au plus court chemin');
+  assert.equal(clearVia(d, DUST2, 1, 'j1'), false, 'plus rien à retirer');
+});
+
+test("point de passage : impossible si le joueur ne bouge pas ; nettoyé et gardé à l'enregistrement", () => {
+  const d = createStrategy({ side: 't' });
+  assert.equal(setVia(d, DUST2, 1, 'j2', [462, 520]), false);
+  setPosition(d, DUST2, 1, 'j1', [895, 300]);
+  setVia(d, DUST2, 1, 'j1', [462, 520]);
+  d.title.text = 'Via';
+  const saved = sanitizeStrategy(finalizeDraft(d, DUST2));
+  assert.deepEqual(saved.steps[0].map.moves.find((m) => m.role === 'j1').via, d.steps[0].map.moves.find((m) => m.role === 'j1').via);
+});
+
+test('mi-parcours : point au milieu de la longueur du trajet', () => {
+  assert.deepEqual(routeMidpoint([[0, 0], [100, 0]]), [50, 0]);
+  assert.deepEqual(routeMidpoint([[0, 0], [10, 0], [10, 90]]), [10, 40]);
+  assert.deepEqual(routeMidpoint([[5, 5], [5, 5]]), [5, 5]);
+});
+
+// ---------- Défaire / Refaire ----------
+test('historique : défaire, refaire, une nouvelle action efface ce qui pouvait être refait', () => {
+  const h = createHistory(3);
+  assert.equal(h.canUndo, false);
+  assert.equal(h.undo('a'), null);
+  h.record('a');
+  h.record('a'); // même état : une seule entrée
+  h.record('b');
+  assert.equal(h.undo('c'), 'b');
+  assert.equal(h.canRedo, true);
+  assert.equal(h.redo('b'), 'c');
+  assert.equal(h.undo('c'), 'b');
+  h.record('x');
+  assert.equal(h.canRedo, false);
+  // Limite : les plus anciennes entrées tombent.
+  h.record('y');
+  h.record('z');
+  const seen = [];
+  for (let s = h.undo('now'); s; s = h.undo(s)) seen.push(s);
+  assert.deepEqual(seen, ['z', 'y', 'x']);
 });

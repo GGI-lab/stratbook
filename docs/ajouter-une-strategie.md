@@ -9,18 +9,31 @@ Deux façons de faire : directement dans l'application (le plus simple), ou en a
 3. Donner un titre. Le side peut encore être changé tant qu'aucun joueur n'a été déplacé (les joueurs repartent alors du spawn de ce side).
 4. **Départ** : glisser les 5 joueurs à leur position de début de round.
 5. Pour chaque étape (1 à 5, bouton **+** pour en ajouter une) :
-   - glisser chaque joueur là où il **finit** l'étape. Le trajet est calculé tout seul en suivant les couloirs de la carte. Un joueur qu'on ne déplace pas reste sur place ;
+   - glisser chaque joueur là où il **finit** l'étape. Le trajet est calculé tout seul en suivant les couloirs de la carte (le plus court chemin). Un joueur qu'on ne déplace pas reste sur place ;
    - toucher un joueur pour le sélectionner : glisser le **point blanc** oriente son regard (cône), **Course / Shift** règle le tracé (trait plein ou pointillés) ;
+   - pour choisir par où il passe (Mid plutôt que Long, par exemple), glisser le **losange** posé au milieu de son trajet : il devient un point de passage, gardé même si on déplace l'arrivée. **Retirer le point de passage** revient au plus court chemin ;
    - **Poser un utilitaire** : choisir le lanceur, toucher S, F, M ou C4, puis toucher la carte. Un utilitaire se déplace en le glissant et se supprime après l'avoir touché ;
    - remplir le volet : titre de l'étape, plan de l'équipe par groupe, appels, mission de chaque joueur (une consigne par ligne).
+   - **Défaire / Refaire** (flèches sous la carte, ou Ctrl+Z / Ctrl+Maj+Z sur ordinateur) annule ou rétablit la dernière action : jeton, regard, point de passage, utilitaire, étape, texte.
+   - Sur téléphone, la carte reste en haut de l'écran pendant qu'on écrit les consignes de l'étape ; elle se réduit quand le clavier est ouvert.
 6. **Rôles des joueurs** : groupe, rôle, résumé et utilitaires de chacun (affichés dans sa vue, à toutes les étapes).
 7. **Enregistrer**. La stratégie est gardée sur ce téléphone (badge « Perso » dans le menu, « Modifiée » pour une stratégie du dépôt changée ici).
 
-Un brouillon est gardé pendant la saisie : si la page se ferme par erreur, il est proposé à la réouverture de l'éditeur.
+Un brouillon est gardé pendant la saisie : si la page se ferme par erreur, il est proposé à la réouverture de l'éditeur. Le bouton retour du téléphone fait comme **Annuler** (confirmation s'il y a des changements).
 
 ### Partager
 
-**Partager** joint la stratégie complète au lien (environ 1 à 3 Ko). L'ami qui l'ouvre la retrouve dans son menu, même après fermeture. Il n'y a pas de serveur : une stratégie créée ici n'existe que sur les téléphones qui ont ouvert le lien. Pour la rendre visible par tous sans lien, l'ajouter au dépôt (ci-dessous).
+**Partager** joint la stratégie au lien. L'ami qui l'ouvre la retrouve dans son menu, même après fermeture. Il n'y a pas de serveur : une stratégie créée ici n'existe que sur les téléphones qui ont ouvert le lien ou importé son fichier. Pour la rendre visible par tous sans lien, l'ajouter au dépôt (ci-dessous).
+
+- Stratégie du dépôt modifiée : le lien ne contient que les changements (quelques centaines de caractères).
+- Stratégie perso : le lien la contient entière (de 1 à 3 Ko environ). Au-delà de 2 000 caractères (limite d'un message Discord sans Nitro), l'application prévient et propose **Envoyer le fichier** ; l'ami l'ouvre avec **Importer un fichier** dans le menu Stratégies.
+- Chaque version enregistrée est datée. Si l'ami (ou toi, avec un ancien lien) a déjà une version différente de la même stratégie, l'application demande : **Garder les deux** (la version reçue arrive avec « (reçue) » dans son titre), **Remplacer la mienne** ou **Garder la mienne**. Une version reçue jamais retouchée est remplacée sans question par une version plus récente.
+
+### Garder ses stratégies
+
+Elles sont gardées dans le navigateur du téléphone. Safari efface les données d'un site qu'on n'ouvre pas pendant 7 jours d'utilisation de Safari ; une app ajoutée à l'écran d'accueil n'est pas concernée. Après le premier enregistrement, l'application propose donc de l'ajouter à l'écran d'accueil (aussi dans le menu : **Ajouter à l'écran d'accueil**). Sur iPhone, l'app installée a son propre stockage, séparé de Safari : **Sauvegarder toutes mes stratégies** dans Safari, puis **Importer un fichier** dans l'app.
+
+**Sauvegarder toutes mes stratégies** (menu Stratégies) crée un fichier avec toutes les stratégies du téléphone ; **Importer un fichier** les remet (sur ce téléphone ou un autre).
 
 **Revenir à la version d'origine** efface les modifications locales d'une stratégie du dépôt. **Supprimer la stratégie** efface une stratégie perso de ce téléphone.
 
@@ -35,8 +48,9 @@ Un brouillon est gardé pendant la saisie : si la page se ferme par erreur, il e
 - `side` : `"Terro"` ou `"CT"`.
 - `frame` (facultatif) : cadrage affiché, en pixels de l'image ; sans lui, toute la carte.
 - `start` (facultatif) : position de chaque joueur au départ ; sans lui, début du tracé de l'étape 1.
-- `steps[].map.positions` : position de chaque joueur **à la fin** de l'étape ; `look` : point regardé ; `moves` : tracés (`"pace": "walk"` = pointillés) ; `utilities` : `{ type, by, at: [x, y] }` ou `{ type, by, zone }` (zone nommée de la carte).
+- `steps[].map.positions` : position de chaque joueur **à la fin** de l'étape ; `look` : point regardé ; `moves` : tracés (`"pace": "walk"` = pointillés, `"via": [[x, y]]` = point de passage imposé) ; `utilities` : `{ type, by, at: [x, y] }` ou `{ type, by, zone }` (zone nommée de la carte).
 - Groupes : `long`, `short`, `mid`, `a`, `b`, et `all` pour les plans et appels de toute l'équipe.
+- `updatedAt` (facultatif) : date de la version en millisecondes, ajoutée par l'application à chaque enregistrement.
 
 ## Pourquoi les trajets doivent être continus
 

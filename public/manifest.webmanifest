@@ -1,0 +1,18 @@
+{
+  "name": "Stratbook",
+  "short_name": "Stratbook",
+  "description": "Playbook de l'équipe : stratégies CS2 sur Dust 2, côté terro et CT.",
+  "lang": "fr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F1720",
+  "theme_color": "#0F1720",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -6,6 +6,15 @@
     <meta name="theme-color" content="#0F1720" />
     <meta name="description" content="Playbook de l'équipe : stratégies CS2 sur Dust 2, côté terro et CT." />
     <title>Stratbook · Dust 2</title>
+    <!-- App installable sur l'écran d'accueil : stratégies mieux gardées (voir src/install.js) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/icons/icon-192.png" sizes="192x192" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="Stratbook" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body data-mode="view">
@@ -46,6 +55,21 @@
             <span>Modifier cette stratégie</span>
           </button>
         </div>
+        <!-- Pas de serveur : sauvegarde et échange de stratégies par fichier, installation de l'app -->
+        <div class="menu__actions menu__actions--secondary">
+          <button type="button" class="menu__action" id="menu-import">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5" /><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15" /></svg>
+            <span>Importer un fichier</span>
+          </button>
+          <button type="button" class="menu__action" id="menu-backup">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.5A1.5 1.5 0 0 1 6.5 4h9L19 7.5v11a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 18.5z" /><path d="M8.5 4v4.5h6V4M8 20v-5.5h8V20" /></svg>
+            <span>Sauvegarder toutes mes stratégies</span>
+          </button>
+          <button type="button" class="menu__action" id="menu-install">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5" /><path d="M12 7.5v7M9 11.5l3 3 3-3" /></svg>
+            <span>Ajouter à l'écran d'accueil</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -67,17 +91,20 @@
     <main class="layout" id="layout">
       <figure class="board">
         <div class="board__stage">
-          <button type="button" class="play" id="play" aria-pressed="false" aria-describedby="play-hint">
-            <svg class="play__icon play__icon--play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>
-            <svg class="play__icon play__icon--stop" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z" /></svg>
-            <span class="play__label">Lecture</span>
-          </button>
-          <span class="sr" id="play-hint">Rejoue toute la stratégie, du départ à la dernière étape.</span>
           <div class="board__map" id="map"></div>
         </div>
       </figure>
 
-      <section class="brief" id="consignes" aria-label="Consignes" tabindex="-1"></section>
+      <div class="brief-wrap">
+        <!-- Bouton Lecture : hors de la carte (il cachait le spawn T), dans le coin du volet -->
+        <button type="button" class="play" id="play" aria-pressed="false" aria-describedby="play-hint">
+          <svg class="play__icon play__icon--play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" /></svg>
+          <svg class="play__icon play__icon--stop" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v10H7z" /></svg>
+          <span class="play__label">Lecture</span>
+        </button>
+        <span class="sr" id="play-hint">Rejoue toute la stratégie sur la carte, du départ à la dernière étape.</span>
+        <section class="brief" id="consignes" aria-label="Consignes" tabindex="-1"></section>
+      </div>
     </main>
 
     <!-- Side sans stratégie -->
@@ -108,14 +135,26 @@
       </form>
     </dialog>
 
-    <!-- Confirmation (quitter sans enregistrer, supprimer) -->
-    <dialog class="nicks confirm" id="confirm-dialog" aria-labelledby="confirm-title">
+    <!-- Confirmation ou choix (quitter sans enregistrer, supprimer, stratégie déjà présente…) -->
+    <dialog class="nicks confirm" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-text">
       <form method="dialog" class="nicks__form">
         <h2 id="confirm-title">Confirmer</h2>
-        <p class="nicks__hint" id="confirm-text"></p>
-        <div class="nicks__actions">
-          <button type="submit" class="btn btn--ghost" value="cancel" id="confirm-no">Annuler</button>
-          <button type="submit" class="btn btn--primary" value="ok" id="confirm-yes">Confirmer</button>
+        <div class="nicks__hint confirm__text" id="confirm-text"></div>
+        <div class="nicks__actions" id="confirm-actions"></div>
+      </form>
+    </dialog>
+
+    <!-- Ajouter à l'écran d'accueil (src/install.js) -->
+    <dialog class="nicks install" id="install-dialog" aria-labelledby="install-title">
+      <form method="dialog" class="nicks__form">
+        <h2 id="install-title">Garde tes stratégies</h2>
+        <p class="nicks__hint" id="install-why"></p>
+        <ol class="install__steps" id="install-steps"></ol>
+        <p class="nicks__hint" id="install-move" hidden>Tes stratégies actuelles restent dans Safari : l'app installée ne les voit pas. Sauvegarde-les d'abord, puis ouvre le fichier avec « Importer un fichier » dans l'app.</p>
+        <div class="nicks__actions nicks__actions--stack">
+          <button type="button" class="btn btn--primary" id="install-now" hidden>Installer</button>
+          <button type="button" class="btn btn--ghost" id="install-backup" hidden>Sauvegarder mes stratégies</button>
+          <button type="submit" class="btn btn--ghost" value="close">Plus tard</button>
         </div>
       </form>
     </dialog>

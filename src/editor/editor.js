@@ -1,7 +1,10 @@
 // Éditeur de stratégie : création et modification, directement dans l'application.
 // - textes du volet de consignes (même structure que l'affichage) ;
 // - placement des joueurs à la main sur la carte, étape par étape, trajets calculés automatiquement ;
-// - regard (cône), allure (course ou shift) et utilitaires posés sur la carte.
+// - regard (cône), allure (course ou shift) et utilitaires posés sur la carte ;
+// - point de passage à glisser sur un trajet pour choisir l'itinéraire (Mid plutôt que Long…) ;
+// - Défaire / Refaire (boutons sous la carte, Ctrl+Z hors des champs de texte) ;
+// - sur téléphone, la carte reste visible en haut pendant qu'on écrit les consignes de l'étape.
 // Les opérations sur les données sont dans ops.js (testées) ; ce fichier gère l'écran.
 import { $, esc, toast, confirmDialog, svgPoint } from '../ui.js';
 import {
@@ -28,7 +31,11 @@ import {
   removeUtility,
   validateDraft,
   finalizeDraft,
+  setVia,
+  clearVia,
+  routeMidpoint,
 } from './ops.js';
+import { createHistory } from './history.js';
 import { renderStepSvg, PLAYER_COLORS, placePlayer, placeCone, scaleFor, UTILITY_NAME, UTILITY_LETTER, utilityPoint } from '../map/render.js';
 import { positionAt, facing } from '../map/routes.js';
 import { getMap } from '../map/maps.js';
@@ -96,6 +103,8 @@ export function openEditor({ strategy, side, library, onClose, step = 1 }) {
     dirty: restored,
     moved: restored,
     groupsTouched: restored,
+    history: createHistory(),
+    typing: null, // saisie en cours : une seule entrée d'historique par champ et par rafale de frappe
   };
   $('editor-title').textContent = isNew ? `Nouvelle stratégie ${SIDES[side].short}` : 'Modifier la stratégie';
   $('editor').hidden = false;
@@ -104,11 +113,14 @@ export function openEditor({ strategy, side, library, onClose, step = 1 }) {
   edZoom = attachZoom($('ed-map'), ctx.frame, { touchAction: 'none' });
   bindMap();
   renderStep();
+  updateHistoryButtons();
+  watchStage();
   if (restored) toast('Brouillon restauré');
   $('ed-title').focus({ preventScroll: true });
 }
 
 function close(result = {}) {
+  stageObserver?.disconnect();
   $('editor').hidden = true;
   $('editor-body').innerHTML = '';
   const { onClose } = ctx;
@@ -139,6 +151,104 @@ function clearDraft() {
   }
 }
 
+// ---------- Défaire / Refaire ----------
+const snap = () => JSON.stringify({ draft: ctx.draft, step: ctx.step });
+const draftText = () => JSON.stringify(ctx.draft);
+
+/** Exécute une modification ; si le brouillon a changé, l'état d'avant peut être rétabli. */
+function undoable(fn) {
+  const before = snap();
+  const beforeDraft = draftText();
+  const result = fn();
+  if (draftText() !== beforeDraft) {
+    ctx.history.record(before);
+    ctx.typing = null;
+    changed();
+  }
+  updateHistoryButtons();
+  return result;
+}
+
+function updateHistoryButtons() {
+  if (!ctx) return;
+  $('ed-undo').disabled = !ctx.history.canUndo;
+  $('ed-redo').disabled = !ctx.history.canRedo;
+}
+
+function restore(text) {
+  const { draft, step } = JSON.parse(text);
+  ctx.draft = draft;
+  ctx.step = Math.min(Math.max(0, step), draft.steps.length);
+  ctx.selected = null;
+  ctx.placing = null;
+  ctx.typing = null;
+  changed();
+  $('ed-title').value = draft.title.text;
+  $('ed-side').querySelectorAll('[data-side]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === sideKey())));
+  $('ed-roles').innerHTML = ROLES.map(roleFields).join('');
+  renderStep();
+  updateHistoryButtons();
+}
+
+function undo() {
+  const prev = ctx?.history.undo(snap());
+  if (prev) {
+    restore(prev);
+    announce('Action défaite');
+  }
+}
+
+function redo() {
+  const next = ctx?.history.redo(snap());
+  if (next) {
+    restore(next);
+    announce('Action refaite');
+  }
+}
+
+const announce = (text) => ($('announce').textContent = text);
+
+// ---------- Carte visible pendant la saisie (téléphone) ----------
+// La carte reste collée en haut de l'écran pendant qu'on écrit les consignes de l'étape ;
+// clavier ouvert, elle se réduit pour laisser la place au texte.
+let stageObserver = null;
+function watchStage() {
+  const stage = $('ed-stage');
+  const root = document.documentElement.style;
+  const set = () => {
+    root.setProperty('--ed-sticky-h', `${Math.round(stage.getBoundingClientRect().height)}px`);
+    root.setProperty('--ed-bar-h', `${Math.round(document.querySelector('.editor__bar').getBoundingClientRect().height)}px`);
+  };
+  stageObserver?.disconnect();
+  if (typeof ResizeObserver === 'function') {
+    stageObserver = new ResizeObserver(set);
+    stageObserver.observe(stage);
+  }
+  set();
+  onViewport();
+}
+
+function onViewport() {
+  const vv = window.visualViewport;
+  // Clavier ouvert : la zone visible est nettement plus basse que la fenêtre.
+  const keyboard = Boolean(vv && vv.height < window.innerHeight * 0.75);
+  $('editor').classList.toggle('editor--keyboard', keyboard);
+}
+window.visualViewport?.addEventListener('resize', onViewport);
+
+/** Bouton retour du téléphone : comme « Annuler ». Renvoie true si l'éditeur est fermé. */
+export async function editorBack() {
+  if (!ctx) return true;
+  if (ctx.dirty) {
+    const ok = await confirmDialog({ title: 'Quitter sans enregistrer ?', text: 'Tes modifications seront perdues.', ok: 'Quitter', cancel: 'Continuer', danger: true });
+    if (!ctx) return true;
+    if (!ok) return false;
+  }
+  clearDraft();
+  close({});
+  return true;
+}
+
 // ---------- Structure de l'écran ----------
 function renderBody() {
   const d = ctx.draft;
@@ -165,8 +275,20 @@ function renderBody() {
       <div class="ed-tabs" id="ed-tabs" role="group" aria-label="Choix de l'étape"></div>
       <div class="ed-work">
         <div class="ed-board">
-          <div class="ed-map" id="ed-map"></div>
-          <p class="ed-hint" id="ed-hint"></p>
+          <div class="ed-stage" id="ed-stage">
+            <div class="ed-map" id="ed-map"></div>
+            <div class="ed-under">
+              <p class="ed-hint" id="ed-hint"></p>
+              <div class="ed-history" role="group" aria-label="Historique des modifications">
+                <button type="button" class="ed-hbtn" id="ed-undo" aria-label="Défaire" title="Défaire (Ctrl+Z)" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7L4.5 11.5 9 16"/><path d="M5 11.5h9.5a5 5 0 0 1 0 10H11"/></svg>
+                </button>
+                <button type="button" class="ed-hbtn" id="ed-redo" aria-label="Refaire" title="Refaire (Ctrl+Maj+Z)" disabled>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 7l4.5 4.5L15 16"/><path d="M19 11.5H9.5a5 5 0 0 0 0 10H13"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="ed-tools" id="ed-tools"></div>
         </div>
         <div class="ed-card ed-step-fields" id="ed-step-fields"></div>
@@ -239,7 +361,7 @@ function renderMap() {
   const k = scaleFor(ctx.frame);
   const imageHref = `${import.meta.env.BASE_URL}${ctx.map.background.href}`;
   const host = $('ed-map');
-  host.innerHTML = renderStepSvg(s, n, { map: ctx.map, frame: ctx.frame, imageHref, highlight: sel, uid: 'ed' });
+  host.innerHTML = renderStepSvg(s, n, { map: ctx.map, frame: ctx.frame, imageHref, highlight: sel, uid: 'ed', hitArea: false });
   const svg = host.querySelector('svg');
   svg.setAttribute('aria-label', ctx.step ? `Placement des joueurs, étape ${ctx.step}` : 'Placement des joueurs au départ');
 
@@ -258,6 +380,14 @@ function renderMap() {
   let top = ROLES.map((r) => `<circle class="ed-hit" data-role="${r}" cx="${pos[r][0]}" cy="${pos[r][1]}" r="${26 * k}" fill="transparent"/>`)
     .sort((a, b) => a.includes(`"${sel}"`) - b.includes(`"${sel}"`))
     .join('');
+  // Point de passage du joueur choisi : losange plein s'il est imposé, en pointillés sinon (à glisser).
+  const move = sel && ctx.step >= 1 ? currentMap().moves.find((mv) => mv.role === sel) : null;
+  if (move) {
+    const [vx, vy] = move.via?.[0] ?? routeMidpoint(move.path);
+    const set = Boolean(move.via?.length);
+    const h = 10 * k;
+    top += `<g class="ed-via${set ? ' is-set' : ''}" data-role="${sel}" transform="translate(${vx} ${vy})"><circle r="${24 * k}" fill="transparent"/><rect x="${-h}" y="${-h}" width="${2 * h}" height="${2 * h}" transform="rotate(45)" fill="${set ? PLAYER_COLORS[sel] : BG}" stroke="#E8EEF4" stroke-width="${3 * k}"${set ? '' : ` stroke-dasharray="${3 * k} ${2.5 * k}"`}/></g>`;
+  }
   if (sel && ctx.step >= 1) {
     const [hx, hy] = handlePoint(sel);
     const [px, py] = pos[sel];
@@ -302,19 +432,20 @@ function bindMap() {
         e.stopImmediatePropagation();
         e.preventDefault();
         const at = svgPoint(svg, e.clientX, e.clientY);
-        const index = addUtility(ctx.draft, ctx.step, { ...ctx.placing, at });
+        const index = undoable(() => addUtility(ctx.draft, ctx.step, { ...ctx.placing, at }));
         ctx.placing = null;
         ctx.selected = { kind: 'utility', index };
-        changed();
         renderMap();
         renderTools();
         return;
       }
       const look = t.closest('.ed-look');
+      const via = t.closest('.ed-via');
       const hit = t.closest('.ed-hit, .player');
       const util = t.closest('.utility');
       let target = null;
       if (look) target = { kind: 'look', role: look.dataset.role };
+      else if (via) target = { kind: 'via', role: via.dataset.role };
       else if (util && ctx.step >= 1) target = { kind: 'utility', index: Number(util.dataset.index) };
       else if (hit) target = { kind: 'player', role: hit.dataset.role };
       if (!target) return; // carte vide : zoom et déplacement
@@ -326,7 +457,7 @@ function bindMap() {
         /* pointeur déjà relâché : sans importance */
       }
       drag = { ...target, id: e.pointerId, x0: e.clientX, y0: e.clientY, moved: false, point: null };
-      if (target.kind !== 'look') {
+      if (target.kind !== 'look' && target.kind !== 'via') {
         const before = JSON.stringify(ctx.selected);
         ctx.selected = target.kind === 'player' ? { kind: 'player', role: target.role } : { kind: 'utility', index: target.index };
         if (JSON.stringify(ctx.selected) !== before) {
@@ -359,6 +490,8 @@ function bindMap() {
       g.querySelector('line').setAttribute('x2', hx);
       g.querySelector('line').setAttribute('y2', hy);
       for (const c of g.querySelectorAll('circle')) c.setAttribute('cx', hx), c.setAttribute('cy', hy);
+    } else if (drag.kind === 'via') {
+      svg.querySelector('.ed-via')?.setAttribute('transform', `translate(${p[0]} ${p[1]})`);
     } else if (drag.kind === 'utility') {
       const u = currentMap().utilities[drag.index];
       const [ux, uy] = utilityPoint(u, zoneById());
@@ -374,12 +507,14 @@ function bindMap() {
       if (d.moved) renderMap();
       return;
     }
-    if (d.kind === 'player') {
-      setPosition(ctx.draft, ctx.map, ctx.step, d.role, d.point);
-      ctx.moved = true;
-    } else if (d.kind === 'look') setLook(ctx.draft, ctx.step, d.role, d.point);
-    else if (d.kind === 'utility') moveUtility(ctx.draft, ctx.map, ctx.step, d.index, d.point);
-    changed();
+    undoable(() => {
+      if (d.kind === 'player') {
+        setPosition(ctx.draft, ctx.map, ctx.step, d.role, d.point);
+        ctx.moved = true;
+      } else if (d.kind === 'look') setLook(ctx.draft, ctx.step, d.role, d.point);
+      else if (d.kind === 'via') setVia(ctx.draft, ctx.map, ctx.step, d.role, d.point);
+      else if (d.kind === 'utility') moveUtility(ctx.draft, ctx.map, ctx.step, d.index, d.point);
+    });
     renderMap();
     renderTools();
   };
@@ -389,7 +524,7 @@ function bindMap() {
   // Toucher la carte à vide : désélection.
   host.addEventListener('click', (e) => {
     if (!ctx || ctx.placing || !ctx.selected) return;
-    if (e.target.closest('.ed-hit, .player, .utility, .ed-look')) return;
+    if (e.target.closest('.ed-hit, .player, .utility, .ed-look, .ed-via')) return;
     ctx.selected = null;
     renderMap();
     renderTools();
@@ -404,6 +539,7 @@ function renderTools() {
     n === 0
       ? 'Départ du round : glisse les joueurs à leur position de départ.'
       : `Glisse un joueur là où il finit l'étape ${n}. Son trajet est calculé tout seul. Pince pour zoomer.`;
+  const via = n >= 1 && sel?.kind === 'player' ? currentMap().moves.find((m) => m.role === sel.role)?.via : null;
   let html = '';
   if (n >= 1 && ctx.placing) {
     html = `<div class="ed-tool ed-tool--placing"><p><strong>Touche la carte</strong> pour poser : ${esc(UTILITY_NAME[ctx.placing.type])} de ${label(ctx.placing.by)}</p><button type="button" class="btn btn--ghost" data-tool="cancel-place">Annuler</button></div>`;
@@ -413,7 +549,12 @@ function renderTools() {
   } else if (n >= 1 && sel?.kind === 'player') {
     const moving = movesDuring(ctx.draft, n, sel.role);
     const pace = currentMap().moves.find((m) => m.role === sel.role)?.pace ?? 'run';
-    html = `<div class="ed-tool"><div class="ed-tool__who"><p>${dot(sel.role)} <strong>${label(sel.role)}</strong></p><p class="ed-note">Glisse le point blanc pour orienter son regard.</p></div>${
+    const tip = moving
+      ? `Glisse le point blanc pour orienter son regard, et le losange pour choisir par où il passe.`
+      : 'Glisse le point blanc pour orienter son regard.';
+    html = `<div class="ed-tool"><div class="ed-tool__who"><p>${dot(sel.role)} <strong>${label(sel.role)}</strong></p><p class="ed-note">${tip}</p>${
+      via ? `<button type="button" class="ed-link" data-tool="clear-via">Retirer le point de passage</button>` : ''
+    }</div>${
       moving
         ? `<div class="seg seg--small" role="group" aria-label="Allure de ${label(sel.role)}">${[
             ['run', 'Course'],
@@ -487,6 +628,20 @@ function onInput(e) {
   const el = e.target;
   const bind = el.dataset?.bind;
   if (!bind) return;
+  const before = snap();
+  const beforeDraft = draftText();
+  applyInput(el, bind);
+  if (draftText() === beforeDraft) return;
+  // Une entrée d'historique par champ et par rafale de frappe (pas une par lettre).
+  const key = `${bind}|${el.dataset.role ?? ''}|${el.dataset.i ?? ''}|${ctx.step}`;
+  const now = Date.now();
+  if (!ctx.typing || ctx.typing.key !== key || now - ctx.typing.at > 1500) ctx.history.record(before);
+  ctx.typing = { key, at: now };
+  changed();
+  updateHistoryButtons();
+}
+
+function applyInput(el, bind) {
   const d = ctx.draft;
   const st = ctx.step >= 1 ? d.steps[ctx.step - 1] : null;
   const i = Number(el.dataset.i);
@@ -530,14 +685,19 @@ function onInput(e) {
       d.roles[role].utilities = linesToTexts(v, d.roles[role].utilities);
       break;
     default:
-      return;
   }
-  changed();
 }
 
 function setSide(side) {
-  const d = ctx.draft;
   if (side === sideKey()) return;
+  undoable(() => applySide(side));
+  $('ed-side').querySelectorAll('[data-side]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === side)));
+  $('ed-roles').innerHTML = ROLES.map(roleFields).join('');
+  renderMap();
+}
+
+function applySide(side) {
+  const d = ctx.draft;
   d.side = txt(SIDES[side].label);
   // Nouvelle stratégie encore vierge : joueurs replacés au spawn du side choisi.
   if (ctx.isNew && !ctx.moved) {
@@ -551,10 +711,6 @@ function setSide(side) {
     if (!ctx.groupsTouched) for (const r of ROLES) d.roles[r].group = fresh.roles[r].group;
     $('editor-title').textContent = `Nouvelle stratégie ${SIDES[side].short}`;
   }
-  changed();
-  $('ed-side').querySelectorAll('[data-side]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.side === side)));
-  $('ed-roles').innerHTML = ROLES.map(roleFields).join('');
-  renderMap();
 }
 
 async function onClick(e) {
@@ -566,11 +722,12 @@ async function onClick(e) {
   if (!btn) return;
 
   if (btn.dataset.side) return setSide(btn.dataset.side);
+  if (btn.id === 'ed-undo') return undo();
+  if (btn.id === 'ed-redo') return redo();
   if (btn.closest('#ed-tabs')) {
     if (btn.id === 'ed-add-step') {
-      if (!addStep(d)) return;
+      if (!undoable(() => addStep(d))) return;
       ctx.step = d.steps.length;
-      changed();
       toast(`Étape ${ctx.step} ajoutée : les joueurs partent de l'étape ${ctx.step - 1}`);
     } else ctx.step = Number(btn.dataset.step);
     ctx.selected = null;
@@ -582,15 +739,13 @@ async function onClick(e) {
   if (btn.dataset.add) {
     const kind = btn.dataset.add;
     const lastGroup = st[kind].at(-1)?.group ?? 'all';
-    st[kind].push({ group: lastGroup, ...txt('') });
-    changed();
+    undoable(() => st[kind].push({ group: lastGroup, ...txt('') }));
     renderStepFields();
     $('ed-step-fields').querySelector(`[data-bind="${kind}-text"][data-i="${st[kind].length - 1}"]`)?.focus();
     return;
   }
   if (btn.dataset.del) {
-    st[btn.dataset.del].splice(Number(btn.dataset.i), 1);
-    changed();
+    undoable(() => st[btn.dataset.del].splice(Number(btn.dataset.i), 1));
     renderStepFields();
     return;
   }
@@ -598,16 +753,14 @@ async function onClick(e) {
     const n = ctx.step;
     const ok = await confirmDialog({ title: `Supprimer l'étape ${n} ?`, text: 'Ses consignes, appels, positions et utilitaires seront retirés.', ok: 'Supprimer', danger: true });
     if (!ok || !ctx) return;
-    removeStep(d, ctx.map, n);
-    ctx.step = Math.min(n, d.steps.length);
+    undoable(() => removeStep(ctx.draft, ctx.map, n));
+    ctx.step = Math.min(n, ctx.draft.steps.length);
     ctx.selected = null;
-    changed();
     renderStep();
     return;
   }
   if (btn.dataset.pace) {
-    setPace(d, ctx.step, ctx.selected.role, btn.dataset.pace);
-    changed();
+    undoable(() => setPace(d, ctx.step, ctx.selected.role, btn.dataset.pace));
     renderMap();
     renderTools();
     return;
@@ -628,9 +781,14 @@ async function onClick(e) {
     return;
   }
   if (btn.dataset.tool === 'remove-util') {
-    removeUtility(d, ctx.step, ctx.selected.index);
+    undoable(() => removeUtility(d, ctx.step, ctx.selected.index));
     ctx.selected = null;
-    changed();
+    renderMap();
+    renderTools();
+    return;
+  }
+  if (btn.dataset.tool === 'clear-via') {
+    undoable(() => clearVia(d, ctx.map, ctx.step, ctx.selected.role));
     renderMap();
     renderTools();
     return;
@@ -656,6 +814,7 @@ async function onClick(e) {
 function exportFile() {
   const s = finalizeDraft(ctx.draft, ctx.map);
   if (!s.title.text) s.title = txt('Sans titre');
+  s.updatedAt = Date.now();
   const blob = new Blob([`${JSON.stringify(s, null, 2)}\n`], { type: 'application/json' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${s.id}.json` });
   document.body.append(a);
@@ -673,6 +832,7 @@ async function save() {
     return;
   }
   const s = finalizeDraft(ctx.draft, ctx.map);
+  s.updatedAt = Date.now(); // date de cette version : sert quand deux versions se croisent
   let persisted = false;
   try {
     persisted = ctx.library.save(s);
@@ -700,3 +860,17 @@ $('editor-body').addEventListener('change', onInput);
 $('editor-body').addEventListener('click', onClick);
 $('ed-save').addEventListener('click', save);
 $('ed-cancel').addEventListener('click', cancel);
+
+// Ctrl+Z / Cmd+Z : défaire, Ctrl+Maj+Z ou Ctrl+Y : refaire (hors des champs de texte, qui ont les leurs).
+document.addEventListener('keydown', (e) => {
+  if (!ctx || document.body.dataset.mode !== 'edit' || document.querySelector('dialog[open]')) return;
+  if (!(e.ctrlKey || e.metaKey) || e.altKey || e.target.closest?.('input, textarea, select')) return;
+  const key = e.key.toLowerCase();
+  if (key === 'z' && !e.shiftKey) {
+    e.preventDefault();
+    undo();
+  } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+    e.preventDefault();
+    redo();
+  }
+});

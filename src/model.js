@@ -35,6 +35,9 @@ export function groupLabel(strategy, id) {
   return own ?? GROUP_PRESETS.find((g) => g.id === id)?.label ?? id;
 }
 
+/** Date de la version (0 si inconnue, par exemple une stratégie du dépôt). */
+export const stampOf = (strategy) => strategy?.updatedAt ?? 0;
+
 /** Cadrage d'affichage : celui de la stratégie, sinon toute la carte. */
 export const frameOf = (strategy, map) => strategy?.frame ?? map.viewBox;
 
@@ -119,6 +122,9 @@ export function buildGroups(strategy) {
 // champ par champ, pour qu'aucune donnée inattendue n'arrive dans le rendu.
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e5;
+// Date de la version (millisecondes) : sert à repérer la plus récente quand deux versions se croisent.
+const isStamp = (v) => Number.isInteger(v) && v > 0 && v < 1e14;
+export const MAX_VIA = 3; // points de passage imposés par trajet
 const point = (v) => (Array.isArray(v) && v.length === 2 && isNum(v[0]) && isNum(v[1]) ? [Math.round(v[0] * 10) / 10, Math.round(v[1] * 10) / 10] : null);
 const cleanText = (v, max = 400) =>
   v && typeof v.text === 'string' ? { text: v.text.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, max), source: v.source === 'pdf' ? 'pdf' : 'ajout' } : null;
@@ -146,7 +152,8 @@ function cleanStepMap(m) {
     if (!ROLES.includes(mv?.role)) return null;
     const path = list(mv.path, point, 200);
     if (path.length < 2) return null;
-    return { role: mv.role, path, ...(PACES.includes(mv.pace) ? { pace: mv.pace } : {}) };
+    const via = list(mv.via, point, MAX_VIA);
+    return { role: mv.role, path, ...(PACES.includes(mv.pace) ? { pace: mv.pace } : {}), ...(via.length ? { via } : {}) };
   });
   const utilities = list(m.utilities, (u) => {
     if (!UTILITY_TYPES.includes(u?.type) || !ROLES.includes(u.by)) return null;
@@ -222,6 +229,7 @@ export function sanitizeStrategy(raw) {
     out.frame = { x: frame.x, y: frame.y, width: frame.width, height: frame.height };
   const start = cleanRoles(raw.start, point);
   if (start) out.start = start;
+  if (isStamp(raw.updatedAt)) out.updatedAt = raw.updatedAt;
   if (typeof raw.sourceDocument === 'string') out.sourceDocument = raw.sourceDocument.slice(0, 200);
   // Libellés de groupes : ceux fournis s'ils sont propres, sinon ceux par défaut.
   out.groups = buildGroups({ ...out, groups: list(raw.groups, (g) => (groupId(g?.id) ? { id: g.id, label: cleanText(g.label, 40) } : null)).filter((g) => g.label) });

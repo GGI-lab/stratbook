@@ -1,13 +1,16 @@
 import { STRATEGIES, DEFAULT_STRATEGY_ID } from './strategies.js';
 import { createLibrary } from './library.js';
-import { sideOf, frameOf, groupLabel, sanitizeStrategy, SIDES } from './model.js';
+import { sideOf, frameOf, groupLabel, stampOf, SIDES } from './model.js';
 import { encodeStrategy, decodeStrategy } from './codec.js';
-import { renderStepSvg, PLAYER_COLORS } from './map/render.js';
+import { incomingAction, copyOf, linkPayload, expandPayload, normalize, backupData, readImport } from './sync.js';
+import { openLayer, closeLayer, whenSettled } from './layers.js';
+import { requestPersist, shouldOfferInstall, canOfferInstall, showInstallDialog } from './install.js';
+import { renderStepSvg, PLAYER_COLORS, R_HIT, scaleFor } from './map/render.js';
 import { getMap, MAPS } from './map/maps.js';
 import { animateTransition } from './map/animate.js';
 import { attachZoom } from './map/zoom.js';
-import { openEditor } from './editor/editor.js';
-import { $, esc, toast } from './ui.js';
+import { openEditor, editorBack } from './editor/editor.js';
+import { $, esc, toast, choiceDialog, saveFile, pickFile, svgPoint } from './ui.js';
 import {
   ROLES,
   TEAM,
@@ -36,10 +39,10 @@ const store = createStore(storage);
 const library = createLibrary(STRATEGIES, storage);
 const MAP_ID = 'dust2'; // une seule carte pour l'instant
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const sameContent = (a, b) => {
-  const key = (s) => JSON.stringify(sanitizeStrategy(s), (k, v) => (k === 'source' ? undefined : v));
-  return key(a) === key(b);
-};
+const touchDevice = () => matchMedia('(pointer: coarse)').matches;
+// Au-delà, un lien ne passe pas dans un message Discord sans Nitro (2 000 caractères).
+const LINK_MAX = 2000;
+const nf = (n) => n.toLocaleString('fr-FR');
 
 // ---------- État ----------
 const state = { strategy: null, side: 't', step: 1, view: TEAM, nicknames: [] };
@@ -66,8 +69,9 @@ function setState(patch, { focusBrief = false } = {}) {
 }
 
 // L'adresse reflète toujours la vue : un rechargement ou une copie manuelle redonne la même vue.
+// Si un écran vient de se fermer (retour dans l'historique en cours), on attend la fin du retour.
 function syncUrl() {
-  history.replaceState(null, '', buildShareUrl(location.href, state.strategy?.id, urlState()));
+  whenSettled(() => history.replaceState(history.state, '', buildShareUrl(location.href, state.strategy?.id, urlState())));
 }
 
 const urlState = () => ({ ...state, step: state.strategy && isRecap() ? RECAP : state.step });
@@ -93,9 +97,12 @@ function selectStrategy(id, { step = STEP_MIN } = {}) {
   lastBySide[state.side] = id;
   library.setLast(id);
   // Une stratégie qui n'existe que sur ce téléphone voyage dans le lien de partage.
-  if (library.isLocalCopy(id)) encodeStrategy(s).then((v) => (shareData[id] = v));
+  if (library.isLocalCopy(id)) encodeStrategy(payloadOf(s)).then((v) => (shareData[id] = v));
   else delete shareData[id];
 }
+
+/** Contenu du lien : différences avec l'original pour une stratégie du dépôt modifiée (lien court). */
+const payloadOf = (s) => linkPayload(s, library.origin(s.id) === 'modified' ? library.builtIn(s.id) : null);
 
 /** Change de side : dernière stratégie vue de ce side, sinon la première, sinon écran vide. */
 function setSide(side) {
@@ -157,6 +164,8 @@ function renderMenu() {
     : `<li class="menu__empty">Aucune stratégie ${esc(side.label)} pour l'instant.</li>`;
   $('menu-new-label').textContent = `Nouvelle stratégie ${side.short}`;
   $('menu-edit').hidden = !state.strategy;
+  $('menu-backup').hidden = library.localList().length === 0;
+  $('menu-install').hidden = !canOfferInstall();
 }
 
 function openMenu() {
@@ -164,14 +173,16 @@ function openMenu() {
   renderMenu();
   $('strat-menu').hidden = false;
   $('open-list').setAttribute('aria-expanded', 'true');
+  openLayer('menu', () => closeMenu({ fromBack: true }));
   ($('menu-list').querySelector('[aria-current]') ?? $('menu-list').querySelector('button') ?? $('menu-new')).focus();
 }
 
-function closeMenu({ focus = false } = {}) {
+function closeMenu({ focus = false, fromBack = false } = {}) {
   if ($('strat-menu').hidden) return;
   $('strat-menu').hidden = true;
   $('open-list').setAttribute('aria-expanded', 'false');
-  if (focus) $('open-list').focus();
+  if (!fromBack) closeLayer('menu');
+  if (focus || fromBack) $('open-list').focus({ preventScroll: true });
 }
 
 $('open-list').addEventListener('click', () => ($('strat-menu').hidden ? openMenu() : closeMenu()));
@@ -191,6 +202,18 @@ $('menu-edit').addEventListener('click', () => {
   closeMenu();
   startEditor(state.strategy);
 });
+$('menu-import').addEventListener('click', () => {
+  closeMenu();
+  importFile();
+});
+$('menu-backup').addEventListener('click', () => {
+  closeMenu();
+  backupAll();
+});
+$('menu-install').addEventListener('click', () => {
+  closeMenu();
+  offerInstall();
+});
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('#strat-menu, #open-list')) closeMenu();
 });
@@ -205,10 +228,17 @@ $('side').addEventListener('click', () => setSide(state.side === 't' ? 'ct' : 't
 $('empty-new').addEventListener('click', () => startEditor(null));
 
 // ---------- Éditeur ----------
+// Retour du téléphone dans l'éditeur : comme « Annuler » (confirmation si des changements seraient perdus).
+async function backFromEditor() {
+  const closed = await editorBack();
+  if (!closed) openLayer('editor', backFromEditor); // l'utilisateur continue : on remet l'entrée d'historique
+}
+
 function startEditor(strategy) {
   stopPlay();
   document.body.dataset.mode = 'edit';
   window.scrollTo(0, 0);
+  openLayer('editor', backFromEditor);
   openEditor({
     strategy,
     side: state.side,
@@ -216,6 +246,7 @@ function startEditor(strategy) {
     library,
     onClose: ({ savedId = null, deletedId = null, step = STEP_MIN } = {}) => {
       document.body.dataset.mode = 'view';
+      closeLayer('editor'); // sans effet si on sort par le bouton retour (entrée déjà retirée)
       if (savedId) selectStrategy(savedId, { step });
       else if (deletedId) {
         if (library.has(deletedId)) selectStrategy(deletedId, { step }); // stratégie du dépôt : retour à l'original
@@ -228,6 +259,7 @@ function startEditor(strategy) {
       render({ from: null });
       window.scrollTo(0, 0);
       $('open-list').focus({ preventScroll: true });
+      if (savedId) protectLocal();
     },
   });
 }
@@ -253,6 +285,16 @@ function renderViews() {
 }
 
 // ---------- Carte et animation ----------
+// Zone de toucher des jetons : 44 px à l'écran (sans zoom), quelle que soit la taille de la carte.
+const HIT_PX = 44;
+function fitHitAreas(svg = $('map').querySelector('svg')) {
+  const width = svg?.getBoundingClientRect().width;
+  if (!width) return;
+  const r = HIT_PX / 2 / (width / frame.width) / scaleFor(frame);
+  svg.querySelectorAll('.player__hit').forEach((c) => c.setAttribute('r', Math.max(R_HIT, r).toFixed(1)));
+}
+addEventListener('resize', () => fitHitAreas());
+
 let shownStep = null; // étape dont les positions sont affichées
 let cancelAnim = () => {};
 
@@ -266,6 +308,7 @@ function renderMap({ from = shownStep, onDone = () => {} } = {}) {
   const to = posStep();
   $('map').innerHTML = renderStepSvg(state.strategy, to, { focus, imageHref, map, frame, recap: isRecap() });
   const svg = $('map').querySelector('svg');
+  fitHitAreas(svg);
   zoom.apply(); // garde le zoom et le déplacement en cours
   const animate = from !== null && from !== to && !reducedMotion();
   shownStep = to;
@@ -478,10 +521,23 @@ $('views').addEventListener('click', (e) => {
   if (btn) setState({ view: btn.dataset.view });
 });
 
-// Toucher un joueur sur la carte ouvre sa vue.
+// Toucher un joueur sur la carte ouvre sa vue. Les zones de toucher (plus larges que les jetons)
+// peuvent se chevaucher : on choisit le joueur le plus proche du doigt.
 $('map').addEventListener('click', (e) => {
   const p = e.target.closest('.player');
-  if (p) setState({ view: p.dataset.role }, { focusBrief: false });
+  if (!p) return;
+  const svg = $('map').querySelector('svg');
+  let role = p.dataset.role;
+  try {
+    const [x, y] = svgPoint(svg, e.clientX, e.clientY);
+    const positions = state.strategy.steps[posStep() - 1].map.positions;
+    role = ROLES.reduce((best, r) =>
+      Math.hypot(positions[r][0] - x, positions[r][1] - y) < Math.hypot(positions[best][0] - x, positions[best][1] - y) ? r : best,
+    );
+  } catch {
+    /* pas de coordonnées (clic clavier) : le joueur touché */
+  }
+  setState({ view: role }, { focusBrief: false });
 });
 
 $('step-dots').addEventListener('click', (e) => {
@@ -578,14 +634,7 @@ async function copy(text) {
   }
 }
 
-$('share').addEventListener('click', async () => {
-  stopPlay();
-  const s = state.strategy;
-  // Stratégie présente seulement sur ce téléphone : elle est jointe au lien.
-  if (s && library.isLocalCopy(s.id) && !shareData[s.id]) shareData[s.id] = await encodeStrategy(s);
-  const url = buildShareUrl(location.href, s?.id, urlState(), { data: s ? shareData[s.id] : undefined });
-  const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
-  const title = s ? `${s.title.text}, ${isRecap() ? 'récap' : `étape ${state.step}`} (${who})` : 'Stratbook';
+async function shareLink(url, title) {
   if (navigator.share) {
     try {
       await navigator.share({ title, url });
@@ -595,7 +644,143 @@ $('share').addEventListener('click', async () => {
     }
   }
   toast((await copy(url)) ? 'Lien copié' : `Copie impossible, voici le lien : ${url}`);
+}
+
+const fileName = (s) => `${s.id}.json`;
+
+$('share').addEventListener('click', async () => {
+  stopPlay();
+  const s = state.strategy;
+  // Stratégie présente seulement sur ce téléphone : elle est jointe au lien.
+  if (s && library.isLocalCopy(s.id) && !shareData[s.id]) shareData[s.id] = await encodeStrategy(payloadOf(s));
+  const url = buildShareUrl(location.href, s?.id, urlState(), { data: s ? shareData[s.id] : undefined });
+  const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
+  const title = s ? `${s.title.text}, ${isRecap() ? 'récap' : `étape ${state.step}`} (${who})` : 'Stratbook';
+  if (s && url.length > LINK_MAX) {
+    const choice = await choiceDialog({
+      title: 'Lien trop long pour Discord',
+      text: [
+        `Ce lien fait ${nf(url.length)} caractères. Discord refuse les messages de plus de 2 000 caractères (sans Nitro).`,
+        'Il passe sur WhatsApp, Messages ou par e-mail. Pour Discord, envoie plutôt le fichier de la stratégie : ton ami l’ouvre avec « Importer un fichier » dans le menu Stratégies.',
+      ],
+      choices: [
+        { value: 'file', label: 'Envoyer le fichier', kind: 'primary' },
+        { value: 'link', label: 'Partager le lien quand même' },
+        { value: 'cancel', label: 'Annuler' },
+      ],
+    });
+    if (choice === 'cancel') return;
+    if (choice === 'file') {
+      const how = await saveFile(fileName(s), normalize(s), { share: touchDevice(), title: s.title.text });
+      if (how === 'downloaded') toast('Fichier téléchargé : envoie-le à ton ami');
+      return;
+    }
+  }
+  await shareLink(url, title);
 });
+
+// ---------- Stratégies reçues (lien ou fichier) ----------
+// Date d'une version ; avec les secondes si les deux versions datent de la même minute.
+const when = (s, other) => {
+  const t = stampOf(s);
+  if (!t) return 'date inconnue';
+  const seconds = Math.floor(t / 60000) === Math.floor(stampOf(other) / 60000) ? { second: '2-digit' } : {};
+  return new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', ...seconds });
+};
+
+/**
+ * Une version différente existe déjà sur ce téléphone : l'utilisateur choisit.
+ * Renvoie l'id de la stratégie à afficher et un message.
+ */
+async function resolveConflict(received, { existing, newer }) {
+  const note = newer === 'received' ? ' (plus récente)' : newer === 'mine' ? ' (plus ancienne)' : '';
+  const mineNote = newer === 'mine' ? ' (plus récente)' : '';
+  const choice = await choiceDialog({
+    title: 'Tu as déjà cette stratégie',
+    text: [
+      `« ${existing.title.text} » existe déjà sur ce téléphone, avec un autre contenu.`,
+      `Ta version : ${when(existing, received)}${mineNote}. Version reçue : ${when(received, existing)}${note}.`,
+    ],
+    choices: [
+      { value: 'both', label: 'Garder les deux', kind: 'primary' },
+      { value: 'replace', label: 'Remplacer la mienne' },
+      { value: 'mine', label: 'Garder la mienne' },
+    ],
+    dismiss: 'mine', // fermer sans choisir ne fait rien perdre
+  });
+  if (choice === 'replace') {
+    library.save(received, { received: true });
+    return { id: received.id, message: 'Ta version a été remplacée' };
+  }
+  if (choice === 'both') {
+    const copy = copyOf(received);
+    library.save(copy, { received: true });
+    return { id: copy.id, message: `Version reçue gardée à part : « ${copy.title.text} »` };
+  }
+  return { id: existing.id, message: 'Ta version est gardée' };
+}
+
+/** Range une stratégie reçue dans la bibliothèque. Renvoie { id, message, added }. */
+async function receive(received) {
+  const res = incomingAction(library, received);
+  if (res.action === 'same') return { id: received.id, message: '', added: false };
+  if (res.action === 'add' || res.action === 'update') {
+    library.save(received, { received: true });
+    return { id: received.id, message: `Stratégie « ${received.title.text} » ${res.action === 'add' ? 'ajoutée' : 'mise à jour'}`, added: true };
+  }
+  return { ...(await resolveConflict(received, res)), added: true };
+}
+
+// ---------- Sauvegarde, import, installation ----------
+/** Stratégies perso sur le téléphone : on demande au navigateur de les garder, et on propose l'installation. */
+function protectLocal() {
+  if (!library.localList().length) return;
+  requestPersist();
+  if (shouldOfferInstall(storage)) offerInstall();
+}
+
+function offerInstall() {
+  showInstallDialog({ storage, hasLocal: library.localList().length > 0, onBackup: backupAll });
+}
+
+async function backupAll() {
+  const list = library.localList();
+  if (!list.length) return toast('Aucune stratégie perso à sauvegarder');
+  const date = new Date().toISOString().slice(0, 10);
+  const how = await saveFile(`stratbook-sauvegarde-${date}.json`, backupData(list), {
+    share: touchDevice(),
+    title: 'Sauvegarde Stratbook',
+  });
+  if (how === 'downloaded') toast(`${list.length} stratégie${list.length > 1 ? 's' : ''} sauvegardée${list.length > 1 ? 's' : ''} dans le fichier`);
+}
+
+async function importFile() {
+  const text = await pickFile();
+  if (text === null) return;
+  let list = [];
+  try {
+    list = readImport(JSON.parse(text));
+  } catch {
+    list = [];
+  }
+  if (!list.length) return toast('Fichier illisible : aucune stratégie trouvée');
+  let shown = null;
+  let added = 0;
+  let lastMessage = '';
+  for (const received of list) {
+    const r = await receive(received);
+    if (r.added) added++;
+    if (r.message) lastMessage = r.message;
+    shown = r.id;
+  }
+  if (shown && library.has(shown)) {
+    selectStrategy(shown);
+    syncUrl();
+    render({ from: null });
+  }
+  toast(list.length === 1 ? lastMessage || 'Stratégie déjà à jour' : `${list.length} stratégies lues, ${added} ajoutée${added > 1 ? 's' : ''} ou mise${added > 1 ? 's' : ''} à jour`);
+  protectLocal();
+}
 
 // ---------- Ouverture ----------
 async function init() {
@@ -607,18 +792,25 @@ async function init() {
 
   let id = params.strategyId;
   let message = '';
-  // Lien avec une stratégie jointe : elle est ajoutée (ou mise à jour) sur ce téléphone.
+  let received = null;
+  let baseChanged = false;
+  // Lien avec une stratégie jointe : complète, ou différences avec l'original du dépôt.
   if (params.data) {
-    const received = sanitizeStrategy(await decodeStrategy(params.data));
-    if (received) {
-      const existing = library.get(received.id);
-      if (!existing || !sameContent(existing, received)) {
-        library.save(received);
-        message = `Stratégie « ${received.title.text} » ${existing ? 'mise à jour' : 'ajoutée'}`;
-      }
-      id = received.id;
-    } else message = 'Stratégie du lien illisible';
+    const got = expandPayload(await decodeStrategy(params.data), (x) => library.builtIn(x));
+    if (got) ({ strategy: received, baseChanged } = got);
+    else message = 'Stratégie du lien illisible';
+  } else if (id && !library.has(id)) {
+    // Adresse copiée à la main : une stratégie perso n'y est pas jointe.
+    message = 'Stratégie introuvable sur ce téléphone. Demande le lien du bouton Partager : il contient la stratégie.';
   }
+  // Version déjà présente et différente : on affiche d'abord la sienne, puis on demande.
+  const conflict = received ? incomingAction(library, received) : null;
+  if (received && conflict.action !== 'conflict') {
+    const r = await receive(received);
+    message = r.message;
+    id = r.id;
+  } else if (received) id = received.id;
+
   if (!library.has(id)) id = null;
   if (!id && params.side) id = library.list({ map: MAP_ID, side: params.side })[0]?.id ?? null;
   if (!id && !params.side) id = [library.lastId(), DEFAULT_STRATEGY_ID].find((x) => x && library.has(x)) ?? null;
@@ -627,7 +819,18 @@ async function init() {
   else state.side = params.side ?? 't';
   syncUrl();
   render({ from: null });
+
+  if (conflict?.action === 'conflict') {
+    const r = await resolveConflict(received, conflict);
+    selectStrategy(r.id, { step: isRecap() ? RECAP : state.step }); // la version choisie (ou la copie)
+    syncUrl();
+    render({ from: null });
+    message = r.message;
+  }
+  if (baseChanged) message = `${message ? `${message}. ` : ''}L’original a changé depuis l’envoi du lien : vérifie la stratégie.`;
   if (message) toast(message);
+  if (received) protectLocal();
+  else if (library.localList().length) requestPersist();
 }
 
 init();

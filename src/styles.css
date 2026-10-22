@@ -239,25 +239,31 @@ button { font: inherit; color: inherit; }
 .board__map svg.is-moving .moves,
 .board__map svg.is-moving .utilities { opacity: 0; transition: none; }
 
-/* Bouton Lecture, posé sur la carte */
+/* Bouton Lecture : dans le coin haut du volet des consignes, hors de la carte (il cachait le spawn T).
+   Compact à l'œil (36 px de haut) ; zone de toucher de 44 px grâce au pseudo-élément. */
+.brief-wrap { position: relative; min-width: 0; }
 .play {
   position: absolute;
-  bottom: var(--space-2);
-  right: var(--space-2);
+  top: 8px;
+  right: 8px;
   z-index: 2;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 40px;
-  padding: 0 var(--space-3) 0 var(--space-2);
+  gap: 6px;
+  height: 36px;
+  padding: 0 var(--space-3) 0 10px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--line);
-  background: rgba(23, 33, 43, 0.92);
+  background: var(--surface-2);
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
 }
-.play__icon { width: 18px; height: 18px; fill: var(--text); }
+.play::before { content: ""; position: absolute; inset: -4px -2px; }
+.play__icon { flex-shrink: 0; }
+/* Le repère d'étape et le titre laissent la place au bouton. */
+.brief .b-meta { padding-right: 104px; min-height: 36px; display: flex; align-items: center; margin-top: -8px; }
+.play__icon { width: 16px; height: 16px; fill: var(--text); }
 .play__icon--stop,
 .play[aria-pressed="true"] .play__icon--play { display: none; }
 .play[aria-pressed="true"] .play__icon--stop { display: block; }
@@ -276,6 +282,7 @@ button { font: inherit; color: inherit; }
 }
 .board__map { touch-action: pan-y; overflow: hidden; border-radius: var(--radius-card); display: flex; justify-content: center; }
 .board__map .player { cursor: pointer; }
+.board__map .player__hit { -webkit-tap-highlight-color: transparent; }
 
 /* ---------- Consignes ---------- */
 /* Échelle du volet : cinq tailles proches, la hiérarchie vient aussi de la graisse et de la couleur. */
@@ -531,7 +538,11 @@ button { font: inherit; color: inherit; }
   font-size: 16px; /* évite le zoom automatique de Safari */
 }
 .field input:focus-visible { border-color: var(--c); outline-color: var(--c); }
-.nicks__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.nicks__actions { display: flex; justify-content: flex-end; gap: var(--space-2); flex-wrap: wrap; }
+/* Trois choix ou plus : boutons l'un sous l'autre, pleine largeur (lisibles au pouce). */
+.nicks__actions--stack { flex-direction: column; align-items: stretch; }
+.confirm__text { display: grid; gap: var(--space-2); }
+.install__steps { display: grid; gap: var(--space-2); padding-left: 1.4em; list-style: decimal; font-size: 15px; }
 
 /* ---------- Message de confirmation ---------- */
 .toast {
@@ -562,7 +573,7 @@ button { font: inherit; color: inherit; }
     max-width: 1200px;
   }
   .board__map svg { height: calc((100vh - 260px) * 0.8); }
-  .brief { position: sticky; top: 170px; }
+  .brief-wrap { position: sticky; top: 170px; align-self: start; }
 }
 
 /* ---------- Menu des stratégies ---------- */
@@ -618,6 +629,8 @@ button { font: inherit; color: inherit; }
 }
 .menu__empty { padding: var(--space-2); color: var(--text-muted); font-size: 15px; }
 .menu__actions { border-top: 1px solid var(--line); margin-top: var(--space-1); padding-top: var(--space-1); display: grid; gap: 2px; }
+.menu__actions--secondary .menu__action { font-weight: 500; color: var(--text-muted); }
+.menu__actions--secondary .menu__action svg { stroke: var(--text-muted); }
 .menu__action { font-weight: 600; }
 .menu__action svg { width: 20px; height: 20px; flex-shrink: 0; fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; margin-left: -1px; }
 
@@ -721,9 +734,48 @@ body[data-mode="edit"] .skip { display: none !important; }
 
 .ed-work { display: grid; gap: var(--space-3); min-width: 0; }
 .ed-board { display: grid; gap: var(--space-2); min-width: 0; }
+.ed-stage { display: grid; gap: var(--space-2); min-width: 0; background: var(--bg); }
 .ed-map { touch-action: none; overflow: hidden; border-radius: var(--radius-card); background: var(--bg); user-select: none; -webkit-user-select: none; }
 .ed-map svg { display: block; width: 100%; height: auto; max-height: 70vh; margin: 0 auto; }
-.ed-map .ed-hit, .ed-map .player, .ed-map .ed-look, .ed-map .utility { cursor: grab; }
+.ed-map .ed-hit, .ed-map .player, .ed-map .ed-look, .ed-map .utility, .ed-map .ed-via { cursor: grab; }
+.ed-under { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.ed-under .ed-hint { flex: 1; min-width: 0; }
+.ed-history { display: flex; gap: var(--space-1); flex-shrink: 0; }
+.ed-hbtn {
+  width: var(--touch);
+  height: var(--touch);
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.ed-hbtn svg { width: 20px; height: 20px; fill: none; stroke: var(--text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.ed-hbtn:disabled { opacity: 0.35; cursor: default; }
+.ed-link { justify-self: start; background: none; border: none; padding: var(--space-2) 0; min-height: var(--touch); color: var(--accent); font-weight: 600; font-size: 14px; cursor: pointer; text-align: left; }
+
+/* Téléphone : la carte reste visible en haut pendant qu'on écrit les consignes de l'étape.
+   .ed-board s'efface (display: contents) pour que la carte colle sur toute la hauteur de .ed-work. */
+@media (max-width: 899px) {
+  .ed-board { display: contents; }
+  .ed-stage {
+    position: sticky;
+    top: var(--ed-bar-h, 57px);
+    z-index: 6;
+    padding-bottom: var(--space-2);
+    margin-bottom: calc(-1 * var(--space-2));
+    border-bottom: 1px solid var(--line);
+  }
+  .ed-map svg { max-height: 42vh; width: auto; max-width: 100%; }
+  .ed-hint { font-size: 13px; line-height: 1.35; }
+  /* Clavier ouvert : carte réduite, consigne réduite à l'essentiel. */
+  .editor--keyboard .ed-map svg { max-height: 24vh; }
+  .editor--keyboard .ed-hint { display: none; }
+  /* Un champ qui reçoit le focus n'est pas caché sous la carte collée. */
+  .ed-step-fields :is(input, textarea, select, button) { scroll-margin-top: calc(var(--ed-bar-h, 57px) + var(--ed-sticky-h, 0px) + var(--space-3)); }
+}
 .ed-map svg.is-placing { cursor: crosshair; }
 .ed-hint { color: var(--text-muted); font-size: 14px; }
 

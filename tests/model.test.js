@@ -113,3 +113,19 @@ test('lien : la stratégie encodée revient identique (hors sources) et reste co
 test('rôles : toujours les 5 joueurs', () => {
   assert.deepEqual(Object.keys(createStrategy().roles), ROLES);
 });
+
+test('nettoyage : date de version gardée si elle est valide', () => {
+  const s = (updatedAt) => sanitizeStrategy({ ...structuredClone(splitA), updatedAt });
+  assert.equal(s(1761148800000).updatedAt, 1761148800000);
+  for (const bad of [-5, 0, 1.5, '1761148800000', 1e15, null]) assert.equal('updatedAt' in s(bad), false, String(bad));
+});
+
+test('nettoyage : points de passage des trajets gardés (3 au plus)', () => {
+  const raw = structuredClone(splitA);
+  const move = raw.steps[0].map.moves[0];
+  move.via = [[500, 500], 'faux', [510, 510], [520, 520], [530, 530]];
+  const clean = sanitizeStrategy(raw).steps[0].map.moves[0];
+  assert.deepEqual(clean.via, [[500, 500], [510, 510]]); // les 3 premiers, dont un invalide retiré
+  move.via = [];
+  assert.equal('via' in sanitizeStrategy(raw).steps[0].map.moves[0], false);
+});

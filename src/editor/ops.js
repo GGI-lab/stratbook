@@ -5,10 +5,12 @@
 // - chaque joueur a une position au départ (étape 0, champ `start`) et à la fin de chaque étape ;
 // - le trajet d'une étape est recalculé automatiquement (couloirs de la carte) dès qu'une des deux
 //   positions qu'il relie change ;
-// - un joueur qui ne bougeait pas aux étapes suivantes suit la nouvelle position (il « reste sur place »).
+// - un joueur qui ne bougeait pas aux étapes suivantes suit la nouvelle position (il « reste sur place ») ;
+// - un point de passage (`via`) impose l'itinéraire : le trajet est calculé en passant par lui
+//   (par exemple Mid plutôt que Long), et il est gardé quand on déplace le joueur.
 import { positionAt } from '../map/routes.js';
 import { computeRoute, getGrid, snapToWalkable } from '../map/nav.js';
-import { ROLES, MAX_STEPS, blankStep, buildGroups, txt, DEFAULT_LABELS, frameOf } from '../model.js';
+import { ROLES, MAX_STEPS, MAX_VIA, blankStep, buildGroups, txt, DEFAULT_LABELS, frameOf } from '../model.js';
 import { utilityPoint } from '../map/render.js';
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -40,10 +42,17 @@ export function recomputeMove(d, map, n, role) {
     if (i >= 0) m.moves.splice(i, 1);
     return;
   }
-  const path = map.nav ? computeRoute(map.nav, from, to).map(round) : [from, to];
+  const via = m.moves[i]?.via ?? [];
+  // Trajet calculé morceau par morceau : départ, points de passage, arrivée.
+  const stops = [from, ...via, to];
+  const path = [];
+  for (let k = 0; k < stops.length - 1; k++) {
+    const part = map.nav ? computeRoute(map.nav, stops[k], stops[k + 1]).map(round) : [stops[k], stops[k + 1]];
+    path.push(...(k ? part.slice(1) : part));
+  }
   path[0] = [...from];
   path[path.length - 1] = [...to];
-  const move = { role, path, ...(m.moves[i]?.pace === 'walk' ? { pace: 'walk' } : {}) };
+  const move = { role, path, ...(m.moves[i]?.pace === 'walk' ? { pace: 'walk' } : {}), ...(via.length ? { via: clone(via) } : {}) };
   if (i >= 0) m.moves[i] = move;
   else m.moves.push(move);
   m.moves.sort((a, b) => ROLES.indexOf(a.role) - ROLES.indexOf(b.role));
@@ -86,6 +95,50 @@ export function setPosition(d, map, n, role, point) {
     else shiftLook(n);
   }
   return p;
+}
+
+/** Point du trajet à mi-parcours (là où l'éditeur propose la poignée du point de passage). */
+export function routeMidpoint(path) {
+  const lengths = path.slice(1).map((p, i) => dist(path[i], p));
+  let left = lengths.reduce((a, b) => a + b, 0) / 2;
+  for (let i = 0; i < lengths.length; i++) {
+    if (left <= lengths[i]) {
+      const t = lengths[i] ? left / lengths[i] : 0;
+      return round([path[i][0] + (path[i + 1][0] - path[i][0]) * t, path[i][1] + (path[i + 1][1] - path[i][1]) * t]);
+    }
+    left -= lengths[i];
+  }
+  return round(path.at(-1));
+}
+
+/**
+ * Impose un point de passage au trajet de `role` pendant l'étape n (index : quel point, 0 par défaut).
+ * Le point est ramené dans un couloir. Renvoie false si le joueur ne bouge pas pendant l'étape.
+ */
+export function setVia(d, map, n, role, point, index = 0) {
+  const m = stepAt(d, n)?.map;
+  const move = m?.moves.find((mv) => mv.role === role);
+  if (!move) return false;
+  const p = round(map.nav ? snapToWalkable(getGrid(map.nav), point) : point);
+  const via = [...(move.via ?? [])];
+  via[Math.min(index, via.length, MAX_VIA - 1)] = p;
+  move.via = via;
+  recomputeMove(d, map, n, role);
+  const updated = m.moves.find((mv) => mv.role === role);
+  if (updated) m.look[role] = lookAlong(updated.path);
+  return true;
+}
+
+/** Retire les points de passage : retour au plus court chemin. */
+export function clearVia(d, map, n, role) {
+  const m = stepAt(d, n)?.map;
+  const move = m?.moves.find((mv) => mv.role === role);
+  if (!move?.via) return false;
+  delete move.via;
+  recomputeMove(d, map, n, role);
+  const updated = m.moves.find((mv) => mv.role === role);
+  if (updated) m.look[role] = lookAlong(updated.path);
+  return true;
 }
 
 export function setLook(d, n, role, point) {
