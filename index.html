@@ -2,17 +2,66 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0F1720" />
+    <meta name="description" content="Playbook de l'équipe : Dust 2, côté terro, Split A (3 Long + 2 Short)." />
     <title>Stratbook · Dust 2 Terro</title>
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
-    <main id="app">
-      <h1>Stratbook</h1>
-      <p>Dust 2 · Terro · Split A, 3 Long + 2 Short</p>
-      <p class="muted">Page provisoire : le site est en construction.</p>
+    <a class="skip" href="#consignes">Aller aux consignes</a>
+
+    <header class="top">
+      <div class="top__titles">
+        <p class="top__map" id="map-label">Dust 2 · Terro</p>
+        <h1 class="top__title" id="strat-title">Split A, 3 Long + 2 Short</h1>
+      </div>
+      <div class="top__actions">
+        <button type="button" class="btn btn--ghost" id="open-nicks" aria-haspopup="dialog">Pseudos</button>
+        <button type="button" class="btn btn--primary" id="share">Partager</button>
+      </div>
+    </header>
+
+    <nav class="views" aria-label="Choix de la vue">
+      <div class="views__row" id="views"></div>
+    </nav>
+
+    <main class="layout">
+      <figure class="board">
+        <div class="board__map" id="map"></div>
+        <figcaption class="board__note" id="map-note"></figcaption>
+      </figure>
+
+      <section class="brief" id="consignes" aria-live="polite" tabindex="-1"></section>
     </main>
+
+    <nav class="steps" aria-label="Étapes de la stratégie">
+      <button type="button" class="steps__arrow" id="prev" aria-label="Étape précédente">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+      </button>
+      <div class="steps__center">
+        <ol class="steps__dots" id="step-dots"></ol>
+        <p class="steps__title" id="step-title"></p>
+      </div>
+      <button type="button" class="steps__arrow" id="next" aria-label="Étape suivante">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+      </button>
+    </nav>
+
+    <dialog class="nicks" id="nicks-dialog" aria-labelledby="nicks-title">
+      <form method="dialog" class="nicks__form" id="nicks-form">
+        <h2 id="nicks-title">Pseudos de l'équipe</h2>
+        <p class="nicks__hint">Enregistrés sur ce téléphone et ajoutés au lien quand tu partages.</p>
+        <div class="nicks__fields" id="nicks-fields"></div>
+        <div class="nicks__actions">
+          <button type="button" class="btn btn--ghost" id="nicks-cancel">Annuler</button>
+          <button type="submit" class="btn btn--primary" value="save">Enregistrer</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

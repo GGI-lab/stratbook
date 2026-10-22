@@ -6,7 +6,7 @@ export const BACKGROUND = { href: 'maps/dust2.webp', width: 1000, height: 1000 }
 
 // Cadrage fixe : moitié droite de la map (Long, Mid, Short, site A, Spawn T).
 // Le site B et ses accès sont hors cadre, la stratégie ne les utilise pas.
-export const VIEWBOX = { x: 360, y: 20, width: 600, height: 940 };
+export const VIEWBOX = { x: 360, y: 20, width: 590, height: 940 };
 
 // Zones nommées. anchor = point où poser un symbole d'utilitaire.
 // Les noms ne sont pas affichés sur la carte (choix de Greg), ils servent aux données et aux tests.
