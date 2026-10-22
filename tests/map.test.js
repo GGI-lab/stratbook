@@ -27,6 +27,16 @@ test("l'image de fond est présente", () => {
   assert.ok(existsSync(new URL('../public/maps/dust2.webp', import.meta.url)));
 });
 
+test('chaque joueur a un point regardé à chaque étape (cône de vision)', () => {
+  for (const s of data.steps)
+    for (const r of ROLES) assert.equal(s.map.look[r]?.length, 2, `étape ${s.n}, ${r}`);
+});
+
+test('la carte n\'affiche aucun nom de zone', () => {
+  const svg = renderStepSvg(data, 1);
+  for (const z of ZONES) assert.ok(!svg.includes(`>${z.name}<`), z.name);
+});
+
 test('chaque étape se dessine, en vue équipe et pour chaque rôle', () => {
   for (const s of data.steps)
     for (const focus of [null, ...ROLES]) {

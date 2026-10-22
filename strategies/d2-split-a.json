@@ -386,7 +386,29 @@
             ]
           }
         ],
-        "utilities": []
+        "utilities": [],
+        "look": {
+          "j1": [
+            900,
+            200
+          ],
+          "j2": [
+            872,
+            200
+          ],
+          "j3": [
+            862,
+            250
+          ],
+          "j4": [
+            465,
+            340
+          ],
+          "j5": [
+            462,
+            330
+          ]
+        }
       }
     },
     {
@@ -538,7 +560,29 @@
             "zone": "short",
             "dy": -20
           }
-        ]
+        ],
+        "look": {
+          "j1": [
+            820,
+            195
+          ],
+          "j2": [
+            760,
+            215
+          ],
+          "j3": [
+            800,
+            640
+          ],
+          "j4": [
+            720,
+            170
+          ],
+          "j5": [
+            630,
+            270
+          ]
+        }
       }
     },
     {
@@ -719,7 +763,29 @@
             "dx": 20,
             "dy": 15
           }
-        ]
+        ],
+        "look": {
+          "j1": [
+            600,
+            215
+          ],
+          "j2": [
+            770,
+            110
+          ],
+          "j3": [
+            790,
+            640
+          ],
+          "j4": [
+            560,
+            215
+          ],
+          "j5": [
+            520,
+            410
+          ]
+        }
       }
     },
     {
@@ -862,7 +928,29 @@
             "dx": 20,
             "dy": 15
           }
-        ]
+        ],
+        "look": {
+          "j1": [
+            580,
+            240
+          ],
+          "j2": [
+            600,
+            200
+          ],
+          "j3": [
+            705,
+            650
+          ],
+          "j4": [
+            560,
+            215
+          ],
+          "j5": [
+            500,
+            420
+          ]
+        }
       }
     }
   ],
@@ -877,7 +965,7 @@
     }
   },
   "mapNote": {
-    "text": "Positions et flèches indicatives. Un symbole d'utilitaire indique sa zone cible, pas une trajectoire de lancer.",
+    "text": "Positions, flèches et champs de vision indicatifs. Un symbole d'utilitaire indique sa zone cible, pas une trajectoire de lancer.",
     "source": "ajout"
   }
 }
