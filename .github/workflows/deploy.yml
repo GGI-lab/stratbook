@@ -10,8 +10,11 @@ permissions:
   pages: write
   id-token: write
 
+# Une seule publication à la fois ; un nouvel envoi annule la précédente.
+# Groupe renommé le 22/10 : une exécution fantôme (bloquée « en cours » chez GitHub depuis 14 h 10)
+# occupait l'ancien groupe « pages » et retenait toutes les publications suivantes en file d'attente.
 concurrency:
-  group: pages
+  group: publication-main
   cancel-in-progress: true
 
 jobs:
