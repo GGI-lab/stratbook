@@ -14,7 +14,7 @@ Une stratégie, c'est un fichier JSON dans `strategies/`. Il est détecté autom
    - `roles` : la consigne de chaque joueur (une liste vide affiche « Pas de nouvelle consigne ») ;
    - `map.positions` : où est chaque joueur **à la fin** de l'étape (pixels de l'image de la carte) ;
    - `map.look` : le point que chaque joueur regarde (oriente son cône de vision) ;
-   - `map.moves` : les tracés. Un tracé part de la position de l'étape précédente et finit près de la nouvelle ;
+   - `map.moves` : les tracés. Un tracé part de la position de l'étape précédente et finit près de la nouvelle. `"pace": "walk"` le dessine en pointillés (shift), sinon trait plein (avance normale) ;
    - `map.utilities` : smokes, flashs, molotovs et bombe, posés sur une zone de la carte.
 6. Lancer `npm test`. Les tests signalent ce qui manque : étapes, rôles, zones inconnues, trajets discontinus, textes sans source.
 
