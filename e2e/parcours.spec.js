@@ -74,18 +74,18 @@ test('toucher un joueur sur la carte ouvre sa vue', async ({ page }) => {
   await expect(views(page).getByRole('button', { name: 'J5' })).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('pseudos : enregistrés, gardés au rechargement, numéro toujours visible', async ({ page }) => {
+test('pseudos : enregistrés, gardés au rechargement, affichés à la place de J1 à J5', async ({ page }) => {
   await page.goto('./');
   await page.getByRole('button', { name: 'Pseudos' }).click();
   await page.getByRole('textbox', { name: /J2,/ }).fill('Greg');
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(page.getByRole('status')).toHaveText('Pseudos enregistrés');
   await page.reload();
-  await views(page).getByRole('button', { name: 'Greg · J2' }).click();
-  await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText(/Greg · J2/);
+  await views(page).getByRole('button', { name: 'Greg', exact: true }).click();
+  await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText(/Greg/);
   // Le rôle choisi est mémorisé : un lien sans paramètre rouvre J2.
   await page.goto('./');
-  await expect(views(page).getByRole('button', { name: 'Greg · J2' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(views(page).getByRole('button', { name: 'Greg', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test("un lien ouvre la même vue et les mêmes pseudos sur un autre appareil", async ({ browser }) => {
@@ -93,8 +93,11 @@ test("un lien ouvre la même vue et les mêmes pseudos sur un autre appareil", a
   const page = await ctx.newPage();
   await page.goto('./?s=d2-split-a&step=2&role=j2&n1=Alex&n2=Greg');
   await expect(brief(page)).toContainText('Étape 2 sur 4');
-  await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText(/Greg · J2/);
-  await expect(brief(page)).toContainText('Alex · J1');
+  await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText(/Greg/);
+  await expect(brief(page).locator('.chip').first()).toHaveText('Alex');
+  // Avec des pseudos, plus de « J1 » ou « J2 » dans les consignes.
+  await expect(brief(page)).not.toContainText('J1');
+  await expect(brief(page)).not.toContainText('J2');
   await ctx.close();
 });
 

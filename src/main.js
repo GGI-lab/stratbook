@@ -2,6 +2,7 @@ import { pickStrategy } from './strategies.js';
 import { renderStepSvg, PLAYER_COLORS } from './map/render.js';
 import { getMap } from './map/maps.js';
 import { animateTransition } from './map/animate.js';
+import { attachZoom } from './map/zoom.js';
 import {
   ROLES,
   TEAM,
@@ -23,6 +24,8 @@ const strategy = pickStrategy(new URLSearchParams(location.search).get('s'));
 const map = getMap(strategy.map);
 const imageHref = `${import.meta.env.BASE_URL}${map.background.href}`;
 const STEP_LAST = strategy.steps.length;
+document.documentElement.style.setProperty('--map-ratio', String(map.viewBox.height / map.viewBox.width));
+const zoom = attachZoom($('map'), map.viewBox);
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const GROUP_LABEL = { long: 'Long', short: 'Short', all: 'Toute l’équipe' };
 
@@ -66,17 +69,21 @@ function callChip(call) {
 const currentStep = () => strategy.steps.find((s) => s.n === state.step);
 
 // ---------- Rendu ----------
+// Bouton Équipe : cinq personnages aux couleurs des joueurs.
+const TEAM_ICONS = ROLES.map(
+  (r) =>
+    `<svg class="team-icon" viewBox="0 0 13 18" aria-hidden="true" style="--c:${PLAYER_COLORS[r]}"><circle class="head" cx="6.5" cy="5" r="3.6"/><path class="body" d="M0.7 17.3c0-4.2 2.6-7.2 5.8-7.2s5.8 3 5.8 7.2z"/></svg>`,
+).join('');
+
 function renderViews() {
   const items = [{ id: TEAM, label: 'Équipe' }, ...ROLES.map((r) => ({ id: r }))];
   $('views').innerHTML = items
     .map(({ id, label }) => {
       const active = state.view === id;
       if (id === TEAM)
-        return `<button type="button" class="view view--team" data-view="${id}" aria-pressed="${active}">${label}</button>`;
+        return `<button type="button" class="view view--team" data-view="${id}" aria-pressed="${active}" aria-label="${label}">${TEAM_ICONS}</button>`;
       const nick = state.nicknames[ROLES.indexOf(id)];
-      // Nom accessible = texte visible (« Greg » ou « J2 ») complété par le numéro de rôle (WCAG 2.5.3).
-      const extra = nick ? `<span class="sr"> · J${roleNumber(id)}</span>` : '';
-      return `<button type="button" class="view" data-view="${id}" aria-pressed="${active}" style="--c:${PLAYER_COLORS[id]}"><span class="view__dot" aria-hidden="true">${roleNumber(id)}</span><span class="view__nick">${esc(nick || `J${roleNumber(id)}`)}</span>${extra}</button>`;
+      return `<button type="button" class="view" data-view="${id}" aria-pressed="${active}" style="--c:${PLAYER_COLORS[id]}"><span class="view__dot" aria-hidden="true">${roleNumber(id)}</span><span class="view__nick">${esc(nick || `J${roleNumber(id)}`)}</span></button>`;
     })
     .join('');
 }
@@ -93,8 +100,8 @@ function renderMap({ from = shownStep, onDone = () => {} } = {}) {
   cancelAnim();
   const focus = state.view === TEAM ? null : state.view;
   $('map').innerHTML = renderStepSvg(strategy, state.step, { focus, imageHref, map });
-  $('map-note').textContent = strategy.mapNote.text;
   const svg = $('map').querySelector('svg');
+  zoom.apply(); // garde le zoom et le déplacement en cours
   const animate = from !== null && from !== state.step && !reducedMotion();
   shownStep = state.step;
   if (!animate) return onDone();
@@ -135,7 +142,7 @@ function renderRoleBrief(step, role) {
         .join('')}</ul>`
     : '';
   return `<h2 class="brief__title brief__title--role" style="--c:${PLAYER_COLORS[role]}"><span class="brief__dot" aria-hidden="true">${roleNumber(role)}</span>${esc(displayName(role, state.nicknames))}</h2>
-    <p class="brief__role">${esc(r.title.text)}</p>
+    <p class="brief__role">${richText(r.title.text)}</p>
     <h3 class="brief__h">Ta mission</h3>${missionHtml}${calls}
     <h3 class="brief__h">Ton rôle</h3><p>${richText(r.summary.text)}</p>${utils}`;
 }

@@ -960,9 +960,5 @@
       "text": "Utilitaires (timing libre)",
       "source": "ajout"
     }
-  },
-  "mapNote": {
-    "text": "Positions, flèches et champs de vision indicatifs. Un symbole d'utilitaire indique sa zone cible, pas une trajectoire de lancer.",
-    "source": "ajout"
   }
 }

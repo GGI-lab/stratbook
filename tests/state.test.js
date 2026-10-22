@@ -60,8 +60,8 @@ test("pseudos : ceux de l'appareil priment, sinon ceux du lien sont adoptés", (
   assert.equal(b.adoptLinkNicknames, true);
 });
 
-test('nom affiché : numéro de rôle toujours visible', () => {
-  assert.equal(displayName('j2', NICKS), 'Alex · J2');
+test('nom affiché : le pseudo seul, sinon le numéro de rôle', () => {
+  assert.equal(displayName('j2', NICKS), 'Alex');
   assert.equal(displayName('j3', NICKS), 'J3');
   assert.equal(displayName('j1', null), 'J1');
 });

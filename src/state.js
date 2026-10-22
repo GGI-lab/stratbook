@@ -27,11 +27,10 @@ export function cleanNickname(value) {
 
 export const roleNumber = (role) => role.slice(1);
 
-// « Greg · J2 » si un pseudo existe, sinon « J2 ».
+// Le pseudo s'il existe (« Greg »), sinon le numéro de rôle (« J2 »).
 export function displayName(role, nicknames) {
   const nick = nicknames?.[ROLES.indexOf(role)];
-  const tag = `J${roleNumber(role)}`;
-  return nick ? `${nick} · ${tag}` : tag;
+  return nick || `J${roleNumber(role)}`;
 }
 
 /** Lit les paramètres du lien. Ignore tout ce qui est invalide. */

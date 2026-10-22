@@ -32,7 +32,7 @@ for (const f of files) {
 
   test(`${s.id} : carte connue, titre et textes d'interface`, () => {
     assert.ok(map, `carte inconnue : ${s.map}`);
-    for (const k of ['side', 'title', 'mapNote']) assert.ok(isText(s[k]), k);
+    for (const k of ['side', 'title']) assert.ok(isText(s[k]), k);
     assert.ok(isText(s.labels?.noNewInstruction) && isText(s.labels?.utilitiesHeading));
   });
 
@@ -73,6 +73,7 @@ for (const f of files) {
       for (const mv of m.moves) {
         assert.ok(ROLES.includes(mv.role) && mv.path.length >= 2, `étape ${st.n} : tracé ${mv.role}`);
         assert.ok(mv.path.every(inFrame), `étape ${st.n} : tracé ${mv.role} hors cadre`);
+        assert.ok([undefined, 'run', 'walk'].includes(mv.pace), `étape ${st.n} : allure ${mv.pace}`);
       }
     }
   });

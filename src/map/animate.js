@@ -1,7 +1,7 @@
 // Animation des joueurs entre deux étapes, dans le navigateur.
 // La carte de l'étape d'arrivée est déjà affichée ; on replace les joueurs au point de départ,
 // puis on les fait glisser le long de leurs trajets, étape intermédiaire par étape intermédiaire.
-import { smoothPath, placePlayer, placeCone, rotateBeak } from './render.js';
+import { smoothPath, placePlayer, placeCone } from './render.js';
 import {
   positionAt,
   lookAt,
@@ -17,7 +17,6 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function setPose(svg, role, pos, deg) {
   svg.querySelector(`.player[data-role="${role}"]`)?.setAttribute('transform', placePlayer(pos));
-  svg.querySelector(`.player[data-role="${role}"] .beak`)?.setAttribute('transform', rotateBeak(deg));
   svg.querySelector(`.cone[data-role="${role}"]`)?.setAttribute('transform', placeCone(pos, deg));
 }
 
