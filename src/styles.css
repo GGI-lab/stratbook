@@ -50,6 +50,15 @@ button { font: inherit; color: inherit; }
   border-radius: 6px;
 }
 
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .skip {
   position: absolute;
   left: var(--space-2);

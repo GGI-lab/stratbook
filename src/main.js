@@ -69,7 +69,9 @@ function renderViews() {
       if (id === TEAM)
         return `<button type="button" class="view view--team" data-view="${id}" aria-pressed="${active}">${label}</button>`;
       const nick = state.nicknames[ROLES.indexOf(id)];
-      return `<button type="button" class="view" data-view="${id}" aria-pressed="${active}" aria-label="${esc(displayName(id, state.nicknames))}" style="--c:${PLAYER_COLORS[id]}"><span class="view__dot">${roleNumber(id)}</span><span class="view__nick">${esc(nick || `J${roleNumber(id)}`)}</span></button>`;
+      // Nom accessible = texte visible (« Greg » ou « J2 ») complété par le numéro de rôle (WCAG 2.5.3).
+      const extra = nick ? `<span class="sr"> · J${roleNumber(id)}</span>` : '';
+      return `<button type="button" class="view" data-view="${id}" aria-pressed="${active}" style="--c:${PLAYER_COLORS[id]}"><span class="view__dot" aria-hidden="true">${roleNumber(id)}</span><span class="view__nick">${esc(nick || `J${roleNumber(id)}`)}</span>${extra}</button>`;
     })
     .join('');
 }
@@ -139,6 +141,9 @@ function render() {
   renderMap();
   renderBrief();
   renderSteps();
+  // Annonce courte pour les lecteurs d'écran, au lieu de relire tout le volet.
+  const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
+  $('announce').textContent = `Étape ${state.step} sur ${STEP_MAX}, ${who}`;
 }
 
 // ---------- Interactions ----------
@@ -162,7 +167,8 @@ $('next').addEventListener('click', () => setState({ step: clampStep(state.step 
 
 // Flèches gauche et droite du clavier pour changer d'étape (hors champs de saisie).
 document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, textarea, dialog[open]')) return;
+  if (e.target.closest?.('input, textarea, select')) return;
+  if (document.querySelector('dialog[open]') || e.altKey || e.ctrlKey || e.metaKey) return;
   if (e.key === 'ArrowLeft') setState({ step: clampStep(state.step - 1) });
   if (e.key === 'ArrowRight') setState({ step: clampStep(state.step + 1) });
 });
