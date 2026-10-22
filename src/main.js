@@ -3,7 +3,7 @@ import { createLibrary } from './library.js';
 import { sideOf, frameOf, groupLabel, stampOf, SIDES } from './model.js';
 import { encodeStrategy, decodeStrategy } from './codec.js';
 import { incomingAction, copyOf, linkPayload, expandPayload, normalize, backupData, readImport } from './sync.js';
-import { openLayer, closeLayer, whenSettled } from './layers.js';
+import { openLayer, closeLayer, swapLayer, whenSettled } from './layers.js';
 import { requestPersist, shouldOfferInstall, canOfferInstall, showInstallDialog } from './install.js';
 import { renderStepSvg, PLAYER_COLORS, R_HIT, scaleFor } from './map/render.js';
 import { getMap, MAPS } from './map/maps.js';
@@ -177,11 +177,12 @@ function openMenu() {
   ($('menu-list').querySelector('[aria-current]') ?? $('menu-list').querySelector('button') ?? $('menu-new')).focus();
 }
 
-function closeMenu({ focus = false, fromBack = false } = {}) {
+/** keepEntry : l'écran suivant (éditeur) reprend l'entrée d'historique du menu. */
+function closeMenu({ focus = false, fromBack = false, keepEntry = false } = {}) {
   if ($('strat-menu').hidden) return;
   $('strat-menu').hidden = true;
   $('open-list').setAttribute('aria-expanded', 'false');
-  if (!fromBack) closeLayer('menu');
+  if (!fromBack && !keepEntry) closeLayer('menu');
   if (focus || fromBack) $('open-list').focus({ preventScroll: true });
 }
 
@@ -195,11 +196,11 @@ $('menu-list').addEventListener('click', (e) => {
   render({ from: null });
 });
 $('menu-new').addEventListener('click', () => {
-  closeMenu();
+  closeMenu({ keepEntry: true });
   startEditor(null);
 });
 $('menu-edit').addEventListener('click', () => {
-  closeMenu();
+  closeMenu({ keepEntry: true });
   startEditor(state.strategy);
 });
 $('menu-import').addEventListener('click', () => {
@@ -229,18 +230,18 @@ $('empty-new').addEventListener('click', () => startEditor(null));
 
 // ---------- Éditeur ----------
 // Retour du téléphone dans l'éditeur : comme « Annuler » (confirmation si des changements seraient perdus).
-// L'entrée d'historique est remise tout de suite : tant que l'éditeur est ouvert, un nouveau retour
-// ne peut pas quitter le site. Si l'éditeur se ferme, onClose la retire (closeLayer).
-function backFromEditor() {
-  openLayer('editor', backFromEditor);
-  editorBack();
+// Si l'utilisateur continue, l'entrée d'historique est remise après son clic (action de l'utilisateur,
+// sans quoi Chrome l'ignorerait au retour suivant).
+async function backFromEditor() {
+  const closed = await editorBack();
+  if (!closed) openLayer('editor', backFromEditor);
 }
 
 function startEditor(strategy) {
   stopPlay();
   document.body.dataset.mode = 'edit';
   window.scrollTo(0, 0);
-  openLayer('editor', backFromEditor);
+  swapLayer('menu', 'editor', backFromEditor); // depuis le menu : même entrée ; sinon nouvelle entrée
   openEditor({
     strategy,
     side: state.side,

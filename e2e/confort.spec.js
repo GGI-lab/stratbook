@@ -36,6 +36,8 @@ test("retour : ferme l'éditeur, en demandant confirmation s'il y a des changeme
   await expect(page.getByRole('dialog')).toContainText('Quitter sans enregistrer ?');
   await page.getByRole('button', { name: 'Continuer' }).click();
   await expect(page.locator('#editor')).toBeVisible();
+  // L'entrée d'historique est remise après le clic (pas d'entrée ajoutée sans action de l'utilisateur).
+  await page.waitForFunction(() => history.state?.stratbookLayer === 'editor');
   await expect(page.getByLabel('Titre de la stratégie')).toHaveValue('Titre changé');
   // Deuxième retour : « Quitter » ferme sans enregistrer.
   await page.goBack();
@@ -86,4 +88,17 @@ test('bouton Lecture : hors de la carte, au-dessus du volet des consignes', asyn
   const [sx, sy] = await toScreen(page, '#map', [400, 900]);
   const topEl = await page.evaluate(([px, py]) => document.elementFromPoint(px, py)?.closest('#play') !== null, [sx, sy]);
   expect(topEl).toBe(false);
+});
+
+test("menu puis éditeur : une seule entrée d'historique, ajoutée au toucher", async ({ page }) => {
+  await page.goto('./');
+  const length0 = await page.evaluate(() => history.length);
+  await page.getByRole('button', { name: 'Stratégies' }).click();
+  await page.getByRole('button', { name: 'Modifier cette stratégie' }).click();
+  await expect(page.locator('#editor')).toBeVisible();
+  // L'entrée du menu est reprise par l'éditeur (pas de retour suivi d'un ajout sans action).
+  expect(await page.evaluate(() => [history.length, history.state?.stratbookLayer])).toEqual([length0 + 1, 'editor']);
+  await page.goBack();
+  await expect(page.locator('#editor')).toBeHidden();
+  await onSite(page);
 });

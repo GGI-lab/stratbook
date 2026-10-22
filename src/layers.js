@@ -1,6 +1,8 @@
 // Bouton retour du téléphone (Android) et geste retour : ferme l'écran ouvert (éditeur, menu)
 // au lieu de quitter le site. Chaque écran ouvert ajoute une entrée à l'historique, avec la même adresse.
 // Les fenêtres modales (<dialog>) se ferment déjà toutes seules au retour sur Android.
+// Une entrée n'est ajoutée qu'après une action de l'utilisateur (toucher, clic) : Chrome saute au retour
+// celles ajoutées sans action, et le retour suivant quitterait alors le site.
 
 const stack = []; // écrans ouverts : { name, onBack }
 let pendingBacks = 0; // retours lancés par l'application elle-même (fermeture par un bouton)
@@ -14,6 +16,18 @@ export function openLayer(name, onBack) {
 }
 
 export const isLayerOpen = (name) => stack.some((l) => l.name === name);
+
+/**
+ * Un écran en remplace un autre (menu → éditeur) en gardant la même entrée d'historique.
+ * Pas de « retour puis ajout » : Chrome ignore au retour les entrées ajoutées sans action
+ * de l'utilisateur, ce qui ferait quitter le site au retour suivant.
+ */
+export function swapLayer(from, name, onBack) {
+  const i = stack.findLastIndex((l) => l.name === from);
+  if (i < 0) return openLayer(name, onBack);
+  stack[i] = { name, onBack };
+  whenSettled(() => history.replaceState({ ...history.state, stratbookLayer: name }, ''));
+}
 
 /**
  * L'écran se ferme par un bouton : on retire son entrée de l'historique.
