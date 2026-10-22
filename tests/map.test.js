@@ -45,3 +45,17 @@ test('chaque étape se dessine, en vue équipe et pour chaque rôle', () => {
       assert.equal((svg.match(/class="player"/g) || []).length, 5);
     }
 });
+
+test('récap : positions de la dernière étape, trajets et utilitaires de toutes les étapes', () => {
+  const last = data.steps.at(-1).n;
+  const svg = renderStepSvg(data, last, { recap: true });
+  const count = (s, re) => (s.match(re) ?? []).length;
+  const moves = data.steps.reduce((n, s) => n + s.map.moves.length, 0);
+  const utils = data.steps.reduce((n, s) => n + s.map.utilities.length, 0);
+  assert.equal(count(svg, /class="move"/g), moves);
+  assert.equal(count(svg, /class="utility"/g), utils);
+  assert.equal(count(svg, /class="player"/g), 5);
+  assert.match(svg, /récap de la stratégie/);
+  // Sans l'option, seule l'étape demandée est tracée.
+  assert.equal(count(renderStepSvg(data, last), /class="move"/g), data.steps.at(-1).map.moves.length);
+});

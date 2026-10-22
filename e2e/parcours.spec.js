@@ -45,12 +45,41 @@ test('parcours du test ami : J2, étape 2, puis étape 3, puis partage', async (
   expect(copied).toContain('role=j2');
 });
 
-test('les boutons ne dépassent pas les étapes 1 et 4', async ({ page }) => {
+test("les boutons vont de l'étape 1 au récap, sans dépasser", async ({ page }) => {
   await page.goto('./?step=1');
   await expect(steps(page).getByRole('button', { name: 'Étape précédente' })).toBeDisabled();
   for (let i = 0; i < 3; i++) await steps(page).getByRole('button', { name: 'Étape suivante' }).click();
   await expect(brief(page)).toContainText('Étape 4 sur 4');
+  await steps(page).getByRole('button', { name: 'Étape suivante' }).click();
+  await expect(brief(page)).toContainText('Récap · 4 étapes');
+  await expect(page).toHaveURL(/step=recap/);
   await expect(steps(page).getByRole('button', { name: 'Étape suivante' })).toBeDisabled();
+});
+
+test('récap équipe : toute la stratégie, puis un joueur ouvre sa vue', async ({ page }) => {
+  await page.goto('./?step=1&role=equipe');
+  await steps(page).getByRole('button', { name: 'Récap de la stratégie' }).click();
+  await expect(steps(page).getByRole('button', { name: 'Récap de la stratégie' })).toHaveAttribute('aria-current', 'step');
+  await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText('Split A, 3 Long + 2 Short');
+  for (const t of ['Prendre Long et Mid', 'Préparer la convergence', 'Entrer sur A et planter', 'Sécuriser après la pose'])
+    await expect(brief(page)).toContainText(t);
+  await expect(brief(page)).toContainText('« Long go »');
+  await expect(brief(page)).toContainText('Smoke Xbox');
+  // Tous les trajets sont tracés sur la carte.
+  expect(await page.locator('#map .move').count()).toBeGreaterThan(5);
+  await brief(page).locator('[data-goto-view="j2"]').click();
+  await expect(views(page).getByRole('button', { name: 'J2' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(brief(page)).toContainText('Tes missions');
+  await expect(brief(page)).toContainText('Smoke CT.');
+  await expect(brief(page)).toContainText('Plante la bombe.');
+});
+
+test('récap : un lien step=recap rouvre le récap', async ({ page }) => {
+  await page.goto('./?s=d2-split-a&step=recap&role=j4');
+  await expect(brief(page)).toContainText('Récap · 4 étapes');
+  await expect(brief(page)).toContainText('Tes missions');
+  await steps(page).getByRole('button', { name: 'Étape précédente' }).click();
+  await expect(brief(page)).toContainText('Étape 4 sur 4');
 });
 
 test("changer de vue conserve l'étape", async ({ page }) => {
@@ -102,7 +131,7 @@ test("un lien ouvre la même vue et les mêmes pseudos sur un autre appareil", a
 });
 
 test("aucun défilement horizontal", async ({ page }) => {
-  for (const url of ['./', './?step=3&role=j5']) {
+  for (const url of ['./', './?step=3&role=j5', './?step=recap&role=equipe', './?step=recap&role=j2']) {
     await page.goto(url);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);

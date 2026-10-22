@@ -9,6 +9,8 @@ export const STEP_MIN = 1;
 // au nombre réel d'étapes de la stratégie.
 export const STEP_MAX = 5;
 export const NICK_MAX = 16;
+// Étape récap : résumé de toute la stratégie, après la dernière étape (`step=recap` dans le lien).
+export const RECAP = 'recap';
 
 const KEY_ROLE = 'stratbook:role';
 const KEY_NICKS = 'stratbook:pseudos';
@@ -37,8 +39,10 @@ export function displayName(role, nicknames) {
 export function parseParams(search) {
   const p = new URLSearchParams(search);
   const out = {};
-  const step = Number(p.get('step'));
-  if (Number.isInteger(step) && step >= STEP_MIN && step <= STEP_MAX) out.step = step;
+  const rawStep = p.get('step');
+  const step = Number(rawStep);
+  if (rawStep === RECAP) out.step = RECAP;
+  else if (Number.isInteger(step) && step >= STEP_MIN && step <= STEP_MAX) out.step = step;
   const role = p.get('role');
   if (VIEWS.includes(role)) out.view = role;
   const nicks = ROLES.map((_, i) => cleanNickname(p.get(`n${i + 1}`)));

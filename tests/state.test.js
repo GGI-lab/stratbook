@@ -47,6 +47,14 @@ test('paramètres invalides ignorés', () => {
   assert.equal(parseParams('?step=5').step, 5);
   assert.deepEqual(parseParams('?step=2.5'), {});
   assert.deepEqual(parseParams('?step=abc&role=EQUIPE'), {});
+  assert.deepEqual(parseParams('?step=Recap'), {});
+});
+
+test('étape récap : lue dans le lien et réécrite telle quelle', () => {
+  assert.equal(parseParams('?step=recap').step, 'recap');
+  const url = buildShareUrl(BASE, 'd2-split-a', { step: 'recap', view: 'j2', nicknames: emptyNicknames() });
+  assert.equal(parseParams(new URL(url).search).step, 'recap');
+  assert.equal(resolveInitial(parseParams('?step=recap'), {}).step, 'recap');
 });
 
 test("pseudos : ceux de l'appareil priment, sinon ceux du lien sont adoptés", () => {

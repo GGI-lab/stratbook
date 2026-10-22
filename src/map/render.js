@@ -87,6 +87,7 @@ export function utilityPoint(u, zoneById) {
  * @param {object} [opts.frame]       cadrage (par défaut celui de la stratégie, sinon la carte entière)
  * @param {string|null} [opts.highlight] rôle entouré sans atténuer les autres (éditeur)
  * @param {string} [opts.uid]         préfixe des identifiants internes (plusieurs cartes dans la page)
+ * @param {boolean} [opts.recap]      récap : positions de l'étape stepN, trajets et utilitaires de toutes les étapes
  */
 export function renderStepSvg(strategy, stepN, opts = {}) {
   const focus = opts.focus ?? null;
@@ -99,8 +100,13 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
   const step = strategy.steps.find((s) => s.n === stepN);
   if (!step) throw new Error(`Étape ${stepN} introuvable`);
   const m = step.map;
+  const recap = Boolean(opts.recap);
+  // Récap : tous les trajets (chacun avec l'étape qui le définit) et tous les utilitaires.
+  const shown = recap ? strategy.steps.filter((s) => s.n <= stepN) : [step];
+  const allMoves = shown.flatMap((s) => s.map.moves.map((mv) => ({ ...mv, n: s.n })));
+  const allUtils = shown.flatMap((s) => s.map.utilities);
   // Identifiant unique pour que plusieurs cartes puissent cohabiter dans une même page.
-  const uid = `${opts.uid ?? 's'}${stepN}-${focus ?? 'equipe'}`;
+  const uid = `${opts.uid ?? 's'}${stepN}${recap ? 'r' : ''}-${focus ?? 'equipe'}`;
   const ringRole = opts.highlight ?? focus;
   const dim = (role) => (focus && role !== focus ? ' opacity="0.28"' : '');
   // Joueur sélectionné dessiné en dernier pour rester au-dessus.
@@ -124,14 +130,14 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
     .join('');
 
   // Le trait relie la position de l'étape précédente au joueur, sans flèche : il touche la pastille.
-  const moves = m.moves
-    .map(({ role, pace = 'run' }) => {
-      const d = smoothPath(segmentRoute(strategy, stepN, role));
+  const moves = allMoves
+    .map(({ role, pace = 'run', n }) => {
+      const d = smoothPath(segmentRoute(strategy, n, role));
       return `<g class="move" data-role="${role}" data-pace="${pace}"${dim(role)}><path d="${d}" fill="none" stroke="${C.bg}" stroke-width="${r1((STROKE + 4) * k)}" stroke-linecap="round" stroke-dasharray="${dash(pace)}" opacity="0.7"/><path d="${d}" fill="none" stroke="${PLAYER_COLORS[role]}" stroke-width="${r1(STROKE * k)}" stroke-linecap="round" stroke-dasharray="${dash(pace)}"/></g>`;
     })
     .join('');
 
-  const utils = m.utilities
+  const utils = allUtils
     .map((u, i) => {
       const { type, by } = u;
       const [x, y] = utilityPoint(u, zoneById);
@@ -153,5 +159,5 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
 
   const vb = `${VIEWBOX.x} ${VIEWBOX.y} ${VIEWBOX.width} ${VIEWBOX.height}`;
   const { width, height } = BACKGROUND;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" data-k="${k}" role="img" aria-label="Plan de ${esc(map.name)}, étape ${stepN}" font-family="Inter, system-ui, sans-serif"><defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" data-k="${k}" role="img" aria-label="Plan de ${esc(map.name)}, ${recap ? 'récap de la stratégie' : `étape ${stepN}`}" font-family="Inter, system-ui, sans-serif"><defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
 }

@@ -1,6 +1,6 @@
 # Stratbook
 
-Playbook CS2 interactif, en français, pensé pour le téléphone. Dust 2, côté terro et CT : stratégie d'origine Split A (3 Long + 2 Short), et stratégies créées ou modifiées dans l'application (éditeur intégré, trajets calculés automatiquement, partage par lien).
+Playbook CS2 interactif, en français, pensé pour le téléphone. Dust 2, côté terro et CT : stratégie d'origine Split A (3 Long + 2 Short), et stratégies créées ou modifiées dans l'application (éditeur intégré, trajets calculés automatiquement, partage par lien), avec une étape récap qui résume toute la stratégie.
 
 Site : https://ggi-lab.github.io/stratbook/
 

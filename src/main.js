@@ -12,6 +12,7 @@ import {
   ROLES,
   TEAM,
   STEP_MIN,
+  RECAP,
   NICK_MAX,
   parseParams,
   resolveInitial,
@@ -45,6 +46,11 @@ const state = { strategy: null, side: 't', step: 1, view: TEAM, nicknames: [] };
 let map = MAPS[MAP_ID];
 let frame = map.viewBox;
 let stepLast = 1;
+// L'étape récap suit la dernière étape : state.step vaut alors stepLast + 1.
+const recapStep = () => stepLast + 1;
+const isRecap = () => state.step > stepLast;
+const posStep = () => Math.min(state.step, stepLast); // étape dont la carte montre les positions
+const toStep = (n) => clampStep(n, recapStep());
 let imageHref = '';
 const zoom = attachZoom($('map'), frame);
 const shareData = {}; // stratégie encodée pour le lien, par id (calculée à l'avance : le partage reste immédiat)
@@ -61,8 +67,10 @@ function setState(patch, { focusBrief = false } = {}) {
 
 // L'adresse reflète toujours la vue : un rechargement ou une copie manuelle redonne la même vue.
 function syncUrl() {
-  history.replaceState(null, '', buildShareUrl(location.href, state.strategy?.id, state));
+  history.replaceState(null, '', buildShareUrl(location.href, state.strategy?.id, urlState()));
 }
+
+const urlState = () => ({ ...state, step: state.strategy && isRecap() ? RECAP : state.step });
 
 /** Affiche une stratégie de la bibliothèque. */
 function selectStrategy(id, { step = STEP_MIN } = {}) {
@@ -74,7 +82,7 @@ function selectStrategy(id, { step = STEP_MIN } = {}) {
   map = getMap(s.map);
   frame = frameOf(s, map);
   stepLast = s.steps.length;
-  state.step = clampStep(step, stepLast);
+  state.step = step === RECAP ? recapStep() : toStep(step);
   imageHref = `${import.meta.env.BASE_URL}${map.background.href}`;
   const ratio = frame.height / frame.width;
   document.documentElement.style.setProperty('--map-ratio', String(ratio));
@@ -204,7 +212,7 @@ function startEditor(strategy) {
   openEditor({
     strategy,
     side: state.side,
-    step: strategy ? state.step : 1,
+    step: strategy ? posStep() : 1,
     library,
     onClose: ({ savedId = null, deletedId = null, step = STEP_MIN } = {}) => {
       document.body.dataset.mode = 'view';
@@ -255,13 +263,14 @@ let cancelAnim = () => {};
 function renderMap({ from = shownStep, onDone = () => {} } = {}) {
   cancelAnim();
   const focus = state.view === TEAM ? null : state.view;
-  $('map').innerHTML = renderStepSvg(state.strategy, state.step, { focus, imageHref, map, frame });
+  const to = posStep();
+  $('map').innerHTML = renderStepSvg(state.strategy, to, { focus, imageHref, map, frame, recap: isRecap() });
   const svg = $('map').querySelector('svg');
   zoom.apply(); // garde le zoom et le déplacement en cours
-  const animate = from !== null && from !== state.step && !reducedMotion();
-  shownStep = state.step;
+  const animate = from !== null && from !== to && !reducedMotion();
+  shownStep = to;
   if (!animate) return onDone();
-  cancelAnim = animateTransition(svg, state.strategy, from, state.step, {
+  cancelAnim = animateTransition(svg, state.strategy, from, to, {
     onDone: () => {
       cancelAnim = () => {};
       onDone();
@@ -269,19 +278,47 @@ function renderMap({ from = shownStep, onDone = () => {} } = {}) {
   });
 }
 
-function renderTeamBrief(step) {
-  const groups = step.team.length
+// ---------- Volet des consignes ----------
+// Structure commune : en-tête (repère d'étape + titre), puis sections titrées, espacées de façon régulière.
+const section = (label, body, cls = '') => `<section class="b-sec${cls ? ` ${cls}` : ''}"><h3 class="b-label">${label}</h3>${body}</section>`;
+
+const head = (meta, title) => `<header class="b-head"><p class="b-meta">${meta}</p>${title}</header>`;
+
+// Identité d'un joueur : pastille, nom (titre du volet) et rôle.
+function playerHead(role) {
+  const r = state.strategy.roles[role];
+  const sub = r.title.text ? `<p class="b-player__role">${richText(r.title.text)}</p>` : '';
+  return `<div class="b-player" style="--c:${PLAYER_COLORS[role]}"><span class="b-dot" aria-hidden="true">${roleNumber(role)}</span><div class="b-player__txt"><h2 class="b-title">${esc(displayName(role, state.nicknames))}</h2>${sub}</div></div>`;
+}
+
+const callsList = (calls) => (calls.length ? `<ul class="calls">${calls.map(callChip).join('')}</ul>` : '');
+const callsFor = (step, role) => {
+  const g = state.strategy.roles[role].group;
+  return step.calls.filter((c) => c.group === g || c.group === 'all');
+};
+
+function plansList(step) {
+  return step.team.length
     ? `<ul class="plans">${step.team
-        .map(
-          (t) =>
-            `<li class="plan"><span class="plan__group">${esc(groupLabel(state.strategy, t.group))}</span><p>${richText(t.text)}</p></li>`,
-        )
+        .map((t) => `<li class="plan"><span class="plan__group">${esc(groupLabel(state.strategy, t.group))}</span><p class="plan__text">${richText(t.text)}</p></li>`)
         .join('')}</ul>`
-    : `<p class="missions missions--none">Pas de plan collectif pour cette étape.</p>`;
-  const calls = step.calls.length
-    ? `<h3 class="brief__h">Appels</h3><ul class="calls">${step.calls.map(callChip).join('')}</ul>`
-    : '';
-  return `<h2 class="brief__title">Plan de l’équipe</h2>${groups}${calls}`;
+    : `<p class="b-none">Pas de plan collectif pour cette étape.</p>`;
+}
+
+function utilsList(role) {
+  const u = state.strategy.roles[role].utilities;
+  return u.length ? `<ul class="utils">${u.map((x) => `<li><span>${richText(x.text)}</span></li>`).join('')}</ul>` : '';
+}
+
+const stepMeta = (step) => `Étape ${step.n} sur ${stepLast}`;
+
+function renderTeamBrief(step) {
+  const title = step.title.text || 'Plan de l’équipe';
+  return (
+    head(stepMeta(step), `<h2 class="b-title">${esc(title)}</h2>`) +
+    section('Plan de l’équipe', plansList(step)) +
+    (step.calls.length ? section('Appels', callsList(step.calls)) : '')
+  );
 }
 
 function renderRoleBrief(step, role) {
@@ -290,39 +327,121 @@ function renderRoleBrief(step, role) {
   const missions = step.roles[role] ?? [];
   const missionHtml = missions.length
     ? `<ul class="missions">${missions.map((m) => `<li>${richText(m.text)}</li>`).join('')}</ul>`
-    : `<p class="missions missions--none">${esc(s.labels.noNewInstruction.text)}</p>`;
-  const myCalls = step.calls.filter((c) => c.group === r.group || c.group === 'all');
-  const calls = myCalls.length
-    ? `<h3 class="brief__h">Appels</h3><ul class="calls">${myCalls.map(callChip).join('')}</ul>`
+    : `<p class="b-none missions--none">${esc(s.labels.noNewInstruction.text)}</p>`;
+  const calls = callsFor(step, role);
+  const meta = step.title.text ? `${stepMeta(step)} · ${esc(step.title.text)}` : stepMeta(step);
+  // Rôle et utilitaires valent pour toute la manche : regroupés sous un trait, après la consigne de l'étape.
+  const round =
+    (r.summary.text ? section('Ton rôle', `<p class="b-text">${richText(r.summary.text)}</p>`) : '') +
+    (r.utilities.length ? section(esc(s.labels.utilitiesHeading.text), utilsList(role)) : '');
+  return (
+    head(meta, playerHead(role)) +
+    `<div class="b-focus">${section('Ta mission', missionHtml)}${calls.length ? section('Appels', callsList(calls)) : ''}</div>` +
+    (round ? `<div class="b-round">${round}</div>` : '')
+  );
+}
+
+// ---------- Récap : toute la stratégie dans le volet ----------
+const recapMeta = () => `Récap · ${stepLast} étape${stepLast > 1 ? 's' : ''}`;
+
+// Frise des étapes : numéro, titre, puis le contenu propre à chaque étape.
+function timeline(render) {
+  return `<ol class="tl">${state.strategy.steps
+    .map(
+      (st) =>
+        `<li class="tl__item"><span class="tl__n" aria-hidden="true">${st.n}</span><div class="tl__body"><p class="tl__title">${esc(st.title.text || `Étape ${st.n}`)}</p>${render(st)}</div></li>`,
+    )
+    .join('')}</ol>`;
+}
+
+const inlineCalls = (calls) =>
+  calls.length
+    ? `<ul class="tl__calls">${calls.map((c) => `<li class="tl__call"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/></svg>« ${esc(c.text)} »</li>`).join('')}</ul>`
     : '';
-  const utils = r.utilities.length
-    ? `<h3 class="brief__h">${esc(s.labels.utilitiesHeading.text)}</h3><ul class="utils">${r.utilities
-        .map((u) => `<li>${richText(u.text)}</li>`)
+
+function renderTeamRecap() {
+  const s = state.strategy;
+  const steps = timeline((st) => {
+    const plans = st.team.length
+      ? `<ul class="tl__plans">${st.team.map((t) => `<li><span class="tl__group">${esc(groupLabel(s, t.group))}</span> ${richText(t.text)}</li>`).join('')}</ul>`
+      : '';
+    return plans + inlineCalls(st.calls);
+  });
+  const roster = `<ul class="roster">${ROLES.map((role) => {
+    const r = s.roles[role];
+    const sum = r.summary.text ? `<span class="roster__sum">${richText(r.summary.text)}</span>` : '';
+    const title = r.title.text ? `<span class="roster__role">${richText(r.title.text)}</span>` : '';
+    return `<li><button type="button" class="roster__item" data-goto-view="${role}" style="--c:${PLAYER_COLORS[role]}"><span class="b-dot b-dot--sm" aria-hidden="true">${roleNumber(role)}</span><span class="roster__txt"><span class="roster__name">${esc(displayName(role, state.nicknames))}</span>${title}${sum}</span></button></li>`;
+  }).join('')}</ul>`;
+  const withUtils = ROLES.filter((role) => s.roles[role].utilities.length);
+  const utils = withUtils.length
+    ? `<ul class="kit">${withUtils
+        .map((role) => `<li>${playerChip(role)}<span>${s.roles[role].utilities.map((u) => richText(u.text)).join(', ')}</span></li>`)
         .join('')}</ul>`
     : '';
-  const title = r.title.text ? `<p class="brief__role">${richText(r.title.text)}</p>` : '';
-  const summary = r.summary.text ? `<h3 class="brief__h">Ton rôle</h3><p>${richText(r.summary.text)}</p>` : '';
-  return `<h2 class="brief__title brief__title--role" style="--c:${PLAYER_COLORS[role]}"><span class="brief__dot" aria-hidden="true">${roleNumber(role)}</span>${esc(displayName(role, state.nicknames))}</h2>
-    ${title}
-    <h3 class="brief__h">Ta mission</h3>${missionHtml}${calls}
-    ${summary}${utils}`;
+  return (
+    head(recapMeta(), `<h2 class="b-title">${esc(s.title.text || 'Sans titre')}</h2>`) +
+    section('Déroulé', steps) +
+    section('Rôles', roster) +
+    (utils ? section(esc(s.labels.utilitiesHeading.text), utils) : '')
+  );
+}
+
+function renderRoleRecap(role) {
+  const s = state.strategy;
+  const r = s.roles[role];
+  const steps = timeline((st) => {
+    const missions = st.roles[role] ?? [];
+    const body = missions.length
+      ? `<ul class="tl__missions">${missions.map((m) => `<li>${richText(m.text)}</li>`).join('')}</ul>`
+      : `<p class="b-none">${esc(s.labels.noNewInstruction.text)}</p>`;
+    return body + inlineCalls(callsFor(st, role));
+  });
+  return (
+    head(recapMeta(), playerHead(role)) +
+    (r.summary.text ? section('Ton rôle', `<p class="b-text">${richText(r.summary.text)}</p>`) : '') +
+    section('Tes missions', steps, 'b-sec--tl') +
+    (r.utilities.length ? section(esc(s.labels.utilitiesHeading.text), utilsList(role)) : '')
+  );
 }
 
 function renderBrief() {
+  const role = state.view === TEAM ? null : state.view;
+  const el = $('consignes');
+  el.classList.toggle('brief--recap', isRecap());
+  // Couleur du joueur suivi : barre des consignes et pastille.
+  if (role) el.style.setProperty('--c', PLAYER_COLORS[role]);
+  else el.style.removeProperty('--c');
+  if (isRecap()) {
+    el.innerHTML = role ? renderRoleRecap(role) : renderTeamRecap();
+    return;
+  }
   const step = currentStep();
-  const body = state.view === TEAM ? renderTeamBrief(step) : renderRoleBrief(step, state.view);
-  $('consignes').innerHTML = `<p class="brief__step">Étape ${step.n} sur ${stepLast} : ${esc(step.title.text)}</p>${body}`;
+  el.innerHTML = role ? renderRoleBrief(step, role) : renderTeamBrief(step);
 }
 
+// Récap équipe : toucher un joueur ouvre sa vue.
+$('consignes').addEventListener('click', (e) => {
+  const goView = e.target.closest('[data-goto-view]');
+  if (goView) setState({ view: goView.dataset.gotoView });
+});
+
 function renderSteps() {
-  $('step-dots').innerHTML = state.strategy.steps
-    .map(
-      (s) =>
-        `<li><button type="button" class="dot" data-step="${s.n}" ${s.n === state.step ? 'aria-current="step"' : ''} aria-label="Étape ${s.n} : ${esc(s.title.text)}">${s.n}</button></li>`,
-    )
-    .join('');
+  const recap = recapStep();
+  $('step-dots').innerHTML =
+    state.strategy.steps
+      .map(
+        (s) =>
+          `<li><button type="button" class="dot" data-step="${s.n}" ${s.n === state.step ? 'aria-current="step"' : ''} aria-label="Étape ${s.n} : ${esc(s.title.text)}">${s.n}</button></li>`,
+      )
+      .join('') +
+    `<li class="steps__recap"><button type="button" class="dot dot--recap" data-step="${recap}" ${isRecap() ? 'aria-current="step"' : ''} aria-label="Récap de la stratégie">Récap</button></li>`;
   $('prev').disabled = state.step <= STEP_MIN;
-  $('next').disabled = state.step >= stepLast;
+  $('next').disabled = state.step >= recap;
+  // Stratégie longue sur petit écran : la barre défile et garde la pastille active visible.
+  const box = $('step-dots');
+  const cur = box.querySelector('[aria-current]')?.parentElement;
+  if (cur && box.scrollWidth > box.clientWidth) box.scrollLeft = cur.offsetLeft - (box.clientWidth - cur.offsetWidth) / 2;
 }
 
 function renderEmpty() {
@@ -342,14 +461,15 @@ function render(mapOpts) {
   $('play').hidden = !has;
   if (!has) return renderEmpty();
   document.body.dataset.view = state.view === TEAM ? 'team' : 'role';
-  document.title = `Étape ${state.step} · ${state.strategy.title.text} · Stratbook`;
+  const where = isRecap() ? 'Récap' : `Étape ${state.step}`;
+  document.title = `${where} · ${state.strategy.title.text} · Stratbook`;
   renderViews();
   renderMap(mapOpts);
   renderBrief();
   renderSteps();
   // Annonce courte pour les lecteurs d'écran, au lieu de relire tout le volet.
   const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
-  $('announce').textContent = `Étape ${state.step} sur ${stepLast}, ${who}`;
+  $('announce').textContent = `${isRecap() ? 'Récap de la stratégie' : `Étape ${state.step} sur ${stepLast}`}, ${who}`;
 }
 
 // ---------- Interactions ----------
@@ -368,16 +488,16 @@ $('step-dots').addEventListener('click', (e) => {
   const btn = e.target.closest('[data-step]');
   if (btn) setState({ step: Number(btn.dataset.step) });
 });
-$('prev').addEventListener('click', () => setState({ step: clampStep(state.step - 1, stepLast) }));
-$('next').addEventListener('click', () => setState({ step: clampStep(state.step + 1, stepLast) }));
+$('prev').addEventListener('click', () => setState({ step: toStep(state.step - 1) }));
+$('next').addEventListener('click', () => setState({ step: toStep(state.step + 1) }));
 
 // Flèches gauche et droite du clavier pour changer d'étape (hors champs de saisie et éditeur).
 document.addEventListener('keydown', (e) => {
   if (document.body.dataset.mode !== 'view' || !state.strategy) return;
   if (e.target.closest?.('input, textarea, select, .menu')) return;
   if (document.querySelector('dialog[open]') || e.altKey || e.ctrlKey || e.metaKey) return;
-  if (e.key === 'ArrowLeft') setState({ step: clampStep(state.step - 1, stepLast) });
-  if (e.key === 'ArrowRight') setState({ step: clampStep(state.step + 1, stepLast) });
+  if (e.key === 'ArrowLeft') setState({ step: toStep(state.step - 1) });
+  if (e.key === 'ArrowRight') setState({ step: toStep(state.step + 1) });
 });
 
 // ---------- Lecture : toute la stratégie, du départ à la dernière étape ----------
@@ -463,9 +583,9 @@ $('share').addEventListener('click', async () => {
   const s = state.strategy;
   // Stratégie présente seulement sur ce téléphone : elle est jointe au lien.
   if (s && library.isLocalCopy(s.id) && !shareData[s.id]) shareData[s.id] = await encodeStrategy(s);
-  const url = buildShareUrl(location.href, s?.id, state, { data: s ? shareData[s.id] : undefined });
+  const url = buildShareUrl(location.href, s?.id, urlState(), { data: s ? shareData[s.id] : undefined });
   const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
-  const title = s ? `${s.title.text}, étape ${state.step} (${who})` : 'Stratbook';
+  const title = s ? `${s.title.text}, ${isRecap() ? 'récap' : `étape ${state.step}`} (${who})` : 'Stratbook';
   if (navigator.share) {
     try {
       await navigator.share({ title, url });
