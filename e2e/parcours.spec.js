@@ -28,8 +28,8 @@ test('parcours du test ami : J2, étape 2, puis étape 3, puis partage', async (
 
   await steps(page).getByRole('button', { name: /Étape 3/ }).click();
   await expect(brief(page).locator('.missions')).toHaveText('Plante la bombe.');
-  await expect(page).toHaveURL(/step=3/);
-  await expect(page).toHaveURL(/role=j2/);
+  // Adresse lisible : stratégie / étape / vue.
+  await expect(page).toHaveURL(/\/stratbook\/d2-split-a\/etape-3\/j2$/);
 
   // Pas de partage natif en test : on vérifie la copie du lien en repli.
   await page.evaluate(() => {
@@ -40,9 +40,7 @@ test('parcours du test ami : J2, étape 2, puis étape 3, puis partage', async (
   await page.getByRole('button', { name: 'Partager' }).click();
   await expect(page.getByRole('status')).toHaveText('Lien copié');
   const copied = await page.evaluate(() => window.__copied);
-  expect(copied).toContain('s=d2-split-a');
-  expect(copied).toContain('step=3');
-  expect(copied).toContain('role=j2');
+  expect(new URL(copied).pathname).toBe('/stratbook/d2-split-a/etape-3/j2');
 });
 
 test("les boutons vont de l'étape 1 au récap, sans dépasser", async ({ page }) => {
@@ -52,7 +50,7 @@ test("les boutons vont de l'étape 1 au récap, sans dépasser", async ({ page }
   await expect(brief(page)).toContainText('Étape 4 sur 4');
   await steps(page).getByRole('button', { name: 'Étape suivante' }).click();
   await expect(brief(page)).toContainText('Récap · 4 étapes');
-  await expect(page).toHaveURL(/step=recap/);
+  await expect(page).toHaveURL(/\/d2-split-a\/recap\/equipe$/);
   await expect(steps(page).getByRole('button', { name: 'Étape suivante' })).toBeDisabled();
 });
 
@@ -117,10 +115,11 @@ test('pseudos : enregistrés, gardés au rechargement, affichés à la place de 
   await expect(views(page).getByRole('button', { name: 'Greg', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
-test("un lien ouvre la même vue et les mêmes pseudos sur un autre appareil", async ({ browser }) => {
+test("un lien ouvre la même vue et les mêmes pseudos sur un autre appareil", async ({ browser, github }) => {
   const ctx = await browser.newContext();
+  await github.attach(ctx);
   const page = await ctx.newPage();
-  await page.goto('./?s=d2-split-a&step=2&role=j2&n1=Alex&n2=Greg');
+  await page.goto('./d2-split-a/etape-2/j2?pseudos=Alex,Greg');
   await expect(brief(page)).toContainText('Étape 2 sur 4');
   await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText(/Greg/);
   await expect(brief(page).locator('.chip').first()).toHaveText('Alex');
@@ -142,4 +141,22 @@ test("l'image de la carte se charge", async ({ page }) => {
   const res = page.waitForResponse((r) => r.url().includes('maps/dust2.webp'));
   await page.goto('./');
   expect((await res).status()).toBe(200);
+});
+
+test('lien lisible : ouvert directement, rechargé, et anciens liens réécrits', async ({ page, request, baseURL }) => {
+  await page.goto('./d2-split-a/recap/j4?pseudos=Greg,,,Max');
+  await expect(brief(page)).toContainText('Récap · 4 étapes');
+  await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText('Max');
+  await page.reload();
+  await expect(brief(page)).toContainText('Récap · 4 étapes');
+  // Fond de carte et styles chargés depuis une adresse à plusieurs niveaux.
+  expect(await page.locator('#map svg image').getAttribute('href')).toBe('/stratbook/maps/dust2.webp');
+  // Ancien lien : la vue s'ouvre et l'adresse prend la forme lisible.
+  await page.goto('./?s=d2-split-a&step=2&role=j3');
+  await expect(brief(page)).toContainText('Étape 2 sur 4');
+  await expect(page).toHaveURL(/\/stratbook\/d2-split-a\/etape-2\/j3/);
+  // GitHub Pages : les adresses lisibles sont servies par 404.html, copie de l'application.
+  const page404 = await request.get(`${baseURL}404.html`);
+  expect(page404.status()).toBe(200);
+  expect(await page404.text()).toBe(await (await request.get(baseURL)).text());
 });

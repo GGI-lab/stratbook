@@ -17,7 +17,7 @@ import {
   STEP_MIN,
   RECAP,
   NICK_MAX,
-  parseParams,
+  parseLink,
   resolveInitial,
   buildShareUrl,
   displayName,
@@ -77,8 +77,11 @@ function setState(patch, { focusBrief = false } = {}) {
 
 // L'adresse reflète toujours la vue : un rechargement ou une copie manuelle redonne la même vue.
 // Si un écran vient de se fermer (retour dans l'historique en cours), on attend la fin du retour.
+// Adresse du site (« https://ggi-lab.github.io/stratbook/ ») : base des liens lisibles.
+const rootUrl = () => new URL(import.meta.env.BASE_URL, location.origin).href;
+
 function syncUrl() {
-  whenSettled(() => history.replaceState(history.state, '', buildShareUrl(location.href, state.strategy?.id, urlState())));
+  whenSettled(() => history.replaceState(history.state, '', buildShareUrl(rootUrl(), state.strategy?.id, urlState())));
 }
 
 const urlState = () => ({ ...state, step: state.strategy && isRecap() ? RECAP : state.step });
@@ -261,6 +264,7 @@ function startEditor(strategy) {
     side: state.side,
     step: strategy ? posStep() : 1,
     origin: strategy ? library.origin(strategy.id) : null,
+    idTaken: (id) => library.has(id),
     publish,
     remove: removeStrategy,
     onClose: ({ savedId = null, deletedId = null, step = STEP_MIN } = {}) => {
@@ -667,7 +671,7 @@ async function shareLink(url, title) {
 $('share').addEventListener('click', async () => {
   stopPlay();
   const s = state.strategy;
-  const url = buildShareUrl(location.href, s?.id, urlState());
+  const url = buildShareUrl(rootUrl(), s?.id, urlState());
   const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
   const title = s ? `${s.title.text}, ${isRecap() ? 'récap' : `étape ${state.step}`} (${who})` : 'Stratbook';
   const shared = await shareLink(url, title);
@@ -832,13 +836,15 @@ function requireAdmin() {
   const setup = !vault.isSetUp();
   $('admin-title').textContent = setup ? 'Configurer l’accès éditeur' : 'Accès éditeur';
   $('admin-hint').textContent = setup
-    ? 'Une seule fois par appareil : colle ton jeton GitHub et choisis un mot de passe. Le jeton reste chiffré sur cet appareil.'
+    ? 'Une seule fois par appareil : colle ton jeton GitHub et invente un mot de passe, qui te sera demandé ensuite. Le jeton reste chiffré sur cet appareil.'
     : 'Mot de passe pour créer, modifier ou supprimer des stratégies.';
   $('admin-token-field').hidden = !setup;
   $('admin-confirm-field').hidden = !setup;
   $('admin-help').hidden = !setup;
   $('admin-forget').hidden = setup;
   $('admin-password').autocomplete = setup ? 'new-password' : 'current-password';
+  // Pas de mot de passe fixé à l'avance : Greg le choisit à la première configuration.
+  document.querySelector('label[for="admin-password"]').textContent = setup ? 'Choisis un mot de passe (8 caractères au moins)' : 'Mot de passe';
   $('admin-submit').textContent = setup ? 'Activer' : 'Déverrouiller';
   $('admin-error').textContent = '';
   $('admin-form').reset();
@@ -895,7 +901,7 @@ function requireAdmin() {
 const within = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
 
 async function init() {
-  const params = parseParams(location.search);
+  const params = parseLink(location.href, import.meta.env.BASE_URL);
   const initial = resolveInitial(params, store.read());
   if (initial.adoptLinkNicknames) store.saveNicknames(initial.nicknames);
   state.view = initial.view;

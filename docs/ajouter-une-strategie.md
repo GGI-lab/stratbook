@@ -7,7 +7,7 @@ Toutes les stratégies sont dans le dépôt GitHub, dossier `strategies/` (un fi
 Créer, modifier et supprimer des stratégies est réservé à Greg. Les amis voient les stratégies mais pas les actions d'édition.
 
 1. Créer un jeton GitHub : photo de profil, **Settings**, **Developer settings**, **Personal access tokens**, **Fine-grained tokens**, **Generate new token**. **Repository access** : seulement `GGI-lab/stratbook`. **Permissions** : **Contents**, **Read and write**, rien d'autre. Choisir une durée de validité.
-2. Dans l'application : menu **Stratégies**, **Modifier les stratégies**. La première fois sur un appareil : coller le jeton et choisir un mot de passe (8 caractères au moins). Ensuite : mot de passe seul.
+2. Dans l'application : menu **Stratégies**, **Modifier les stratégies**. La première fois sur un appareil : coller le jeton et **inventer** un mot de passe (8 caractères au moins, il n'y en a pas de fixé à l'avance). Ensuite : ce mot de passe seul. Mot de passe oublié : **Oublier l'accès de cet appareil**, puis recommencer avec le jeton.
 3. **Verrouiller l'édition** (menu) referme l'accès ; il se referme aussi en fermant l'onglet.
 
 Le jeton est gardé chiffré par le mot de passe sur l'appareil (AES-GCM, clé dérivée par PBKDF2) ; il n'est jamais écrit dans le dépôt, qui est public. La vraie protection est le jeton : sans lui, personne ne peut écrire dans le dépôt, même en contournant l'écran du mot de passe. Jeton perdu ou volé : le révoquer sur GitHub, en créer un autre, puis **Oublier l'accès de cet appareil** et le reconfigurer.
@@ -33,7 +33,15 @@ Un brouillon est gardé pendant la saisie : si la page se ferme par erreur, il e
 
 ### Partager
 
-**Partager** envoie un lien court : l'id de la stratégie, l'étape, la vue et les pseudos (`?s=d2-split-a&step=2&role=j2&n1=Greg`). La stratégie elle-même est lue dans GitHub.
+**Partager** envoie un lien lisible avant même de cliquer : stratégie, étape, vue, puis les pseudos (J1 à J5, séparés par des virgules) :
+
+`https://ggi-lab.github.io/stratbook/d2-split-a/etape-2/j2?pseudos=Greg,Alex,,Sam,Zoé`
+
+- étape : `etape-1` à `etape-5`, ou `recap` ; vue : `equipe` ou `j1` à `j5` ;
+- une nouvelle stratégie reçoit un id tiré de son titre (« Retake B » côté CT donne `d2-ct-retake-b`), qui ne change plus ensuite pour que les liens envoyés restent valables ;
+- les anciens liens (`?s=d2-split-a&step=2&role=j2&n1=Greg`) marchent toujours.
+
+La stratégie elle-même est lue dans GitHub. Ces adresses n'existent pas en fichiers : GitHub Pages répond avec `404.html`, une copie de l'application générée à la construction (`vite.config.js`).
 
 ### Supprimer
 

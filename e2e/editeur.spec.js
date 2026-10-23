@@ -82,9 +82,9 @@ test('créer une stratégie CT, placer les joueurs, la publier dans GitHub, la l
 
   // Partage : lien court, seulement l'id, l'étape, la vue.
   const link = await shareLink(page);
-  expect(link).not.toContain('d=');
-  expect(new URL(link).searchParams.get('s')).toBe(id);
-  expect(link.length).toBeLessThan(120);
+  // Id lisible tiré du titre, et lien lisible : /stratbook/d2-ct-retake-b/etape-1/equipe.
+  expect(id).toBe('d2-ct-retake-b');
+  expect(new URL(link).pathname).toBe('/stratbook/d2-ct-retake-b/etape-1/equipe');
 
   // L'ami l'ouvre avant la mise à jour du site : lue directement dans GitHub.
   const ctx = await browser.newContext();

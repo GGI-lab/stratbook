@@ -22,7 +22,7 @@ test.describe('accès éditeur', () => {
     await menu(page).click();
     await page.getByRole('button', { name: 'Modifier les stratégies' }).click();
     await page.getByLabel('Jeton GitHub').fill('github_pat_faux');
-    await page.getByLabel('Mot de passe', { exact: true }).fill('motdepasse1');
+    await page.getByLabel('Choisis un mot de passe (8 caractères au moins)').fill('motdepasse1');
     await page.getByLabel('Confirme le mot de passe').fill('motdepasse1');
     await page.getByRole('button', { name: 'Activer' }).click();
     await expect(page.locator('#admin-error')).toContainText('Jeton GitHub refusé');
@@ -33,11 +33,12 @@ test.describe('accès éditeur', () => {
     await menu(page).click();
     await page.getByRole('button', { name: 'Modifier les stratégies' }).click();
     await page.getByLabel('Jeton GitHub').fill(TOKEN);
-    await page.getByLabel('Mot de passe', { exact: true }).fill('court');
+    const choose = page.getByLabel('Choisis un mot de passe (8 caractères au moins)');
+    await choose.fill('court');
     await page.getByLabel('Confirme le mot de passe').fill('court');
     await page.getByRole('button', { name: 'Activer' }).click();
     await expect(page.locator('#admin-error')).toHaveText('Mot de passe : 8 caractères au moins.');
-    await page.getByLabel('Mot de passe', { exact: true }).fill('motdepasse1');
+    await choose.fill('motdepasse1');
     await page.getByLabel('Confirme le mot de passe').fill('motdepasse2');
     await page.getByRole('button', { name: 'Activer' }).click();
     await expect(page.locator('#admin-error')).toHaveText('Les deux mots de passe sont différents.');
@@ -181,12 +182,10 @@ test.describe('lecture depuis GitHub', () => {
     await expect(title(page)).toHaveText('Split A, 3 Long + 2 Short');
   });
 
-  test('lien partagé : toujours court (id, étape, vue, pseudos)', async ({ page }) => {
-    await page.goto('./?step=3&role=j2&n1=Greg&n2=Alex');
+  test('lien partagé : court et lisible (stratégie / étape / vue, pseudos)', async ({ page, baseURL }) => {
+    await page.goto('./?step=3&role=j2&n1=Greg&n2=Zoé');
     const link = await shareLink(page);
-    const url = new URL(link);
-    expect([...url.searchParams.keys()]).toEqual(['s', 'step', 'role', 'n1', 'n2']);
-    expect(link.length).toBeLessThan(120);
+    expect(link).toBe(`${baseURL}d2-split-a/etape-3/j2?pseudos=Greg,Zoé`);
   });
 });
 

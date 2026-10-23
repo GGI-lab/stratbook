@@ -48,8 +48,8 @@ test('Lecture : rejoue toute la stratégie puis s\'arrête à la dernière étap
   const play = page.getByRole('button', { name: 'Lecture' });
   await play.click();
   await expect(page.locator('#play')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page).toHaveURL(/step=1/);
-  await expect(page).toHaveURL(/step=4/, { timeout: 15000 });
+  await expect(page).toHaveURL(/\/etape-1\//);
+  await expect(page).toHaveURL(/\/etape-4\//, { timeout: 15000 });
   await expect(page.locator('#play')).toHaveAttribute('aria-pressed', 'false', { timeout: 5000 });
   await expect(j2(page)).toHaveAttribute('transform', J2_STEP4);
 });

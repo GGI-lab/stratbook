@@ -21,7 +21,7 @@ Chaque envoi sur `main` publie le site via GitHub Actions, y compris les commits
 - `src/library.js`, `src/model.js` : bibliothèque (stratégies du site, version à jour de GitHub, anciennes stratégies du téléphone), modèle et nettoyage des données.
 - `src/github.js` : stratégies lues et écrites dans ce dépôt par l'API GitHub (un commit par enregistrement ou suppression).
 - `src/vault.js` : accès éditeur, jeton GitHub chiffré par mot de passe sur l'appareil.
-- `src/install.js`, `public/manifest.webmanifest`, `public/icons/` : installation sur l'écran d'accueil. Icônes générées par `node scripts/icons.mjs`.
+- `src/install.js`, `public/manifest.webmanifest`, `public/icons/` : installation sur l'écran d'accueil. Icônes générées depuis `assets-src/icone-source.png` par `python3 scripts/icons.py`.
 - `src/layers.js` : bouton retour du téléphone (ferme le menu ou l'éditeur au lieu de quitter le site).
 - `src/editor/` : éditeur (écran dans `editor.js`, opérations testées dans `ops.js`, historique Défaire / Refaire dans `history.js`).
 - `src/map/` : cartes (image, cadrage, zones, grille de navigation), calcul des trajets (`nav.js`), rendu SVG et animation entre étapes.

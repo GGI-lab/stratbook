@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { sideOf, createStrategy, sanitizeStrategy, groupLabel, buildGroups, ROLES } from '../src/model.js';
+import { sideOf, createStrategy, sanitizeStrategy, groupLabel, buildGroups, slugId, ROLES } from '../src/model.js';
 
 const splitA = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
 
@@ -73,4 +73,16 @@ test('nettoyage : points de passage des trajets gardés (3 au plus)', () => {
   assert.deepEqual(clean.via, [[500, 500], [510, 510]]); // les 3 premiers, dont un invalide retiré
   move.via = [];
   assert.equal('via' in sanitizeStrategy(raw).steps[0].map.moves[0], false);
+});
+
+test('id lisible tiré du titre : sans accents, unique, valide', () => {
+  assert.equal(slugId('dust2', 'ct', 'Retake B'), 'd2-ct-retake-b');
+  assert.equal(slugId('dust2', 't', '  Rush B, 5 joueurs !! '), 'd2-t-rush-b-5-joueurs');
+  assert.equal(slugId('dust2', 't', 'Exécute « Long » été'), 'd2-t-execute-long-ete');
+  const taken = new Set(['d2-ct-retake-b', 'd2-ct-retake-b-2']);
+  assert.equal(slugId('dust2', 'ct', 'Retake B', (id) => taken.has(id)), 'd2-ct-retake-b-3');
+  assert.match(slugId('dust2', 't', '¡¿!'), /^d2-t-[a-z0-9]{6}$/, 'titre sans lettres : id au hasard');
+  const long = slugId('dust2', 't', 'a'.repeat(30) + ' ' + 'b'.repeat(30));
+  assert.ok(long.length <= 64 && !long.endsWith('-'));
+  for (const id of [long, slugId('dust2', 'ct', 'Retake B')]) assert.ok(sanitizeStrategy({ ...createStrategy({ id }), title: { text: 'x', source: 'ajout' } }), id);
 });

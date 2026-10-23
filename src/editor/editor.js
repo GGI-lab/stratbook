@@ -16,6 +16,7 @@ import {
   UTILITY_TYPES,
   createStrategy,
   sanitizeStrategy,
+  slugId,
   txt,
 } from '../model.js';
 import {
@@ -68,12 +69,13 @@ const groupOptions = (list, selected) =>
  * @param {object|null} opts.strategy  stratégie à modifier, null pour en créer une
  * @param {'t'|'ct'} opts.side         side d'une nouvelle stratégie
  * @param {'repo'|'local'|null} opts.origin  dans le dépôt GitHub, seulement sur ce téléphone, ou nouvelle
+ * @param {(id: string) => boolean} [opts.idTaken]  id déjà utilisé (id lisible d'une nouvelle stratégie)
  * @param {(s: object) => Promise<boolean>} opts.publish  publie dans GitHub (true si c'est fait)
  * @param {(s: object) => Promise<boolean>} opts.remove   supprime du dépôt (true si c'est fait)
  * @param {Function} opts.onClose      appelée avec { savedId, step } ou { deletedId, step } ou {}
  * @param {number} [opts.step]         étape affichée à l'ouverture
  */
-export function openEditor({ strategy, side, origin = null, publish, remove, onClose, step = 1 }) {
+export function openEditor({ strategy, side, origin = null, idTaken = () => false, publish, remove, onClose, step = 1 }) {
   const isNew = !strategy;
   const key = isNew ? `new:${side}` : strategy.id;
   let draft = isNew ? createStrategy({ mapId: 'dust2', side }) : prepareDraft(strategy);
@@ -97,6 +99,7 @@ export function openEditor({ strategy, side, origin = null, publish, remove, onC
     isNew,
     publish,
     remove,
+    idTaken,
     onClose,
     origin: isNew ? null : origin,
     step: Math.min(Math.max(1, step), draft.steps.length), // l'éditeur s'ouvre sur l'étape affichée
@@ -833,6 +836,8 @@ async function save() {
     return;
   }
   const s = sanitizeStrategy({ ...finalizeDraft(ctx.draft, ctx.map), updatedAt: Date.now() });
+  // Nouvelle stratégie : id lisible tiré du titre (il apparaît dans les liens).
+  if (s && ctx.isNew) s.id = slugId(s.map, sideKey(), s.title.text, ctx.idTaken);
   if (!s) {
     toast('Enregistrement impossible : stratégie invalide');
     return;

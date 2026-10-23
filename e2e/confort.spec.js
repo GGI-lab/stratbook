@@ -5,7 +5,7 @@ test.beforeEach(async ({ context }) => {
   await asAdmin(context);
 });
 
-const onSite = (page) => expect(page).toHaveURL(/\/stratbook\/\?s=d2-split-a/);
+const onSite = (page) => expect(page).toHaveURL(/\/stratbook\/d2-split-a\//);
 
 test('retour : ferme le menu des stratégies sans quitter le site', async ({ page }) => {
   await page.goto('./');
@@ -54,7 +54,7 @@ test("enregistrer puis retour : on revient à la page d'avant l'ouverture du sit
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(page.locator('#strat-title')).toHaveText('Split A modifiée');
   // L'adresse garde l'étape et la vue ; l'historique ne contient plus l'éditeur ni le menu.
-  await expect(page).toHaveURL(/step=2&role=j2/);
+  await expect(page).toHaveURL(/\/stratbook\/d2-split-a\/etape-2\/j2$/);
   expect(await page.evaluate(() => history.state?.stratbookLayer ?? null)).toBeNull();
 });
 

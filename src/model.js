@@ -55,6 +55,27 @@ export function newStrategyId(mapId, side, rand = Math.random) {
   return `${prefix}-${side}-${Math.floor(rand() * 36 ** 6).toString(36).padStart(6, '0')}`;
 }
 
+/**
+ * Id lisible d'une nouvelle stratégie, tiré de son titre : « Retake B » côté CT → d2-ct-retake-b.
+ * Il sert dans les liens (/stratbook/d2-ct-retake-b/etape-1/equipe) et ne change plus ensuite,
+ * même si le titre change (les liens déjà envoyés restent valables). Déjà pris : -2, -3…
+ */
+export function slugId(mapId, side, title, isTaken = () => false) {
+  const prefix = `${mapId === 'dust2' ? 'd2' : mapId}-${side}`;
+  const words = String(title ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/, '');
+  const base = words ? `${prefix}-${words}` : newStrategyId(mapId, side);
+  let id = base;
+  for (let n = 2; isTaken(id); n++) id = `${base}-${n}`;
+  return id;
+}
+
 /** Stratégie vierge : 1 étape, joueurs au spawn du side choisi. */
 export function createStrategy({ mapId = 'dust2', side = 't', id } = {}) {
   const map = MAPS[mapId];
