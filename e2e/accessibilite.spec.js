@@ -10,14 +10,16 @@ for (const url of ['./?step=1&role=equipe', './?step=2&role=j2&n2=Greg', './?ste
   });
 }
 
-test('axe : panneau pseudos ouvert', async ({ page }) => {
+test('axe : panneau pseudos ouvert', async ({ page, context }) => {
+  await asAdmin(context);
   await page.goto('./');
   await page.getByRole('button', { name: 'Pseudos' }).click();
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(violations.map((v) => v.id)).toEqual([]);
 });
 
-test('clavier : Échap ferme le panneau pseudos et le focus revient au bouton', async ({ page, browserName }) => {
+test('clavier : Échap ferme le panneau pseudos et le focus revient au bouton', async ({ page, context }) => {
+  await asAdmin(context);
   await page.goto('./');
   const open = page.getByRole('button', { name: 'Pseudos' });
   await open.focus();

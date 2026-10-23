@@ -21,6 +21,8 @@ const gitSha = (text) => {
  */
 export function createFakeRepo() {
   const files = Object.fromEntries(readdirSync(DIR).filter((f) => f.endsWith('.json')).map((f) => [f.slice(0, -5), readFileSync(new URL(f, DIR), 'utf8')]));
+  // Pseudos de l'équipe (data/equipe.json) ; null = fichier absent.
+  let teamText = readFileSync(new URL('../tests/fixtures/data/equipe.json', import.meta.url), 'utf8');
   const commits = [];
   const reads = [];
   let failure = null;
@@ -33,6 +35,25 @@ export function createFakeRepo() {
     const auth = req.headers().authorization;
     const authed = auth === `Bearer ${TOKEN}`;
     if (auth && !authed) return json(route, 401, { message: 'Bad credentials' });
+    // Fichier des pseudos de l'équipe.
+    if (url.pathname === '/repos/GGI-lab/stratbook/contents/data/equipe.json') {
+      if (method === 'GET') {
+        if (teamText === null) return json(route, 404, { message: 'Not Found' });
+        return json(route, 200, { content: Buffer.from(teamText, 'utf8').toString('base64'), sha: gitSha(teamText) });
+      }
+      if (!authed) return json(route, 401, { message: 'Requires authentication' });
+      if (failure) {
+        const status = failure;
+        failure = null;
+        return json(route, status, { message: 'Erreur simulée' });
+      }
+      const body = req.postDataJSON();
+      const current = teamText === null ? null : gitSha(teamText);
+      if (current && body.sha !== current) return json(route, body.sha ? 409 : 422, { message: 'sha mismatch' });
+      teamText = Buffer.from(body.content, 'base64').toString('utf8');
+      commits.push({ method, id: 'equipe', message: body.message });
+      return json(route, 200, { content: { sha: gitSha(teamText) } });
+    }
     const m = url.pathname.match(/^\/repos\/GGI-lab\/stratbook(?:\/contents\/strategies(?:\/([a-z0-9-]+)\.json)?)?$/);
     if (!m) return json(route, 404, { message: 'Not Found' });
     const id = m[1];
@@ -74,6 +95,9 @@ export function createFakeRepo() {
     /** Change un fichier « ailleurs » (autre appareil, ou commit direct). */
     setFile: (id, strategy) => (files[id] = `${JSON.stringify(strategy, null, 2)}\n`),
     strategy: (id) => (id in files ? JSON.parse(files[id]) : null),
+    /** Pseudos enregistrés dans le dépôt (null si le fichier est absent). */
+    team: () => (teamText === null ? null : JSON.parse(teamText)),
+    setTeam: (pseudos) => (teamText = pseudos === null ? null : `${JSON.stringify({ pseudos }, null, 2)}\n`),
     attach: (context) => context.route('https://api.github.com/**', handle),
   };
 }

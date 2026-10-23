@@ -1,4 +1,5 @@
-// Stratégies enregistrées dans le dépôt GitHub (dossier strategies/), lues et écrites par l'API REST.
+// Stratégies (dossier strategies/) et pseudos de l'équipe (data/equipe.json) enregistrés dans le dépôt GitHub,
+// lus et écrits par l'API REST.
 // - Lecture (tout le monde) : liste du dossier puis contenu des fichiers nouveaux ou modifiés.
 //   Sans jeton : limite de 60 requêtes par heure et par adresse IP, mise en cache 60 s par GitHub.
 // - Écriture (Greg seulement) : un commit par enregistrement ou suppression, avec son jeton GitHub.
@@ -9,6 +10,7 @@ export const REPO = { owner: 'GGI-lab', name: 'stratbook', branch: 'main', dir: 
 const API = 'https://api.github.com';
 
 export const pathOf = (id) => `${REPO.dir}/${id}.json`;
+export const TEAM_PATH = 'data/equipe.json';
 const contentsUrl = (path = REPO.dir) => `${API}/repos/${REPO.owner}/${REPO.name}/contents/${path}`;
 
 /** Erreur de l'API, avec un message en français et un code utilisable par l'interface. */
@@ -43,7 +45,7 @@ async function call(fetchFn, url, { token, method = 'GET', body, accept = 'appli
   if (status === 403 && remaining === '0') throw new GitHubError('limit', 'Limite de requêtes GitHub atteinte, réessaie dans quelques minutes.', status);
   if (status === 403) throw new GitHubError('rights', 'Ce jeton n’a pas le droit d’écrire dans le dépôt.', status);
   if (status === 404) throw new GitHubError('missing', 'Fichier introuvable dans le dépôt.', status);
-  if (status === 409 || status === 422) throw new GitHubError('conflict', 'La stratégie a été modifiée ailleurs entre-temps.', status);
+  if (status === 409 || status === 422) throw new GitHubError('conflict', 'Le fichier a été modifié ailleurs entre-temps.', status);
   throw new GitHubError('other', `Erreur GitHub (${status}).`, status);
 }
 
@@ -80,34 +82,55 @@ export async function listStrategies(fetchFn = fetch, { token } = {}) {
     .map((f) => ({ id: f.name.slice(0, -5), sha: f.sha }));
 }
 
-/** Texte et empreinte d'un fichier de stratégie. */
-export async function readStrategy(fetchFn, id, { token } = {}) {
-  const res = await call(fetchFn, `${contentsUrl(pathOf(id))}?ref=${REPO.branch}`, { token });
+/** Texte et empreinte d'un fichier du dépôt. */
+export async function readFile(fetchFn, path, { token } = {}) {
+  const res = await call(fetchFn, `${contentsUrl(path)}?ref=${REPO.branch}`, { token });
   const data = await res.json();
   return { text: fromBase64(data.content ?? ''), sha: data.sha };
 }
 
-/** Texte du fichier tel qu'il est enregistré (lisible dans GitHub, une ligne finale). */
-export const fileText = (strategy) => `${JSON.stringify(strategy, null, 2)}\n`;
-
 /**
- * Crée ou remplace un fichier de stratégie (un commit). `sha` : empreinte de la version remplacée
+ * Crée ou remplace un fichier du dépôt (un commit). `sha` : empreinte de la version remplacée
  * (absente pour une création) ; si le fichier a changé entre-temps, erreur 'conflict'.
  * Renvoie la nouvelle empreinte.
  */
-export async function writeStrategy(fetchFn, token, strategy, { sha, message } = {}) {
-  const res = await call(fetchFn, contentsUrl(pathOf(strategy.id)), {
+export async function writeFile(fetchFn, token, path, text, { sha, message }) {
+  const res = await call(fetchFn, contentsUrl(path), {
     token,
     method: 'PUT',
-    body: {
-      message: message ?? `Stratégie « ${strategy.title.text} » ${sha ? 'modifiée' : 'ajoutée'} depuis l’application`,
-      content: toBase64(fileText(strategy)),
-      branch: REPO.branch,
-      ...(sha ? { sha } : {}),
-    },
+    body: { message, content: toBase64(text), branch: REPO.branch, ...(sha ? { sha } : {}) },
   });
   const data = await res.json();
   return data.content?.sha ?? null;
+}
+
+/** Texte et empreinte d'un fichier de stratégie. */
+export const readStrategy = (fetchFn, id, opts) => readFile(fetchFn, pathOf(id), opts);
+
+/** Texte du fichier tel qu'il est enregistré (lisible dans GitHub, une ligne finale). */
+export const fileText = (data) => `${JSON.stringify(data, null, 2)}\n`;
+
+/** Crée ou remplace un fichier de stratégie (un commit). Renvoie la nouvelle empreinte. */
+export function writeStrategy(fetchFn, token, strategy, { sha, message } = {}) {
+  return writeFile(fetchFn, token, pathOf(strategy.id), fileText(strategy), {
+    sha,
+    message: message ?? `Stratégie « ${strategy.title.text} » ${sha ? 'modifiée' : 'ajoutée'} depuis l’application`,
+  });
+}
+
+/** Pseudos de l'équipe (texte et empreinte), ou null si le fichier n'existe pas encore. */
+export async function readTeam(fetchFn, { token } = {}) {
+  try {
+    return await readFile(fetchFn, TEAM_PATH, { token });
+  } catch (err) {
+    if (err.code === 'missing') return null;
+    throw err;
+  }
+}
+
+/** Enregistre les pseudos de l'équipe (un commit). Renvoie la nouvelle empreinte. */
+export function writeTeam(fetchFn, token, team, { sha } = {}) {
+  return writeFile(fetchFn, token, TEAM_PATH, fileText(team), { sha, message: 'Pseudos de l’équipe modifiés depuis l’application' });
 }
 
 /** Supprime un fichier de stratégie (un commit). */

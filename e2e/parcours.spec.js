@@ -101,12 +101,15 @@ test('toucher un joueur sur la carte ouvre sa vue', async ({ page }) => {
   await expect(views(page).getByRole('button', { name: 'J5' })).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('pseudos : enregistrés, gardés au rechargement, affichés à la place de J1 à J5', async ({ page }) => {
+test('pseudos : enregistrés dans GitHub, gardés au rechargement, affichés à la place de J1 à J5', async ({ page, context, github }) => {
+  await asAdmin(context);
   await page.goto('./');
   await page.getByRole('button', { name: 'Pseudos' }).click();
   await page.getByRole('textbox', { name: /J2,/ }).fill('Greg');
   await page.getByRole('button', { name: 'Enregistrer' }).click();
-  await expect(page.getByRole('status')).toHaveText('Pseudos enregistrés');
+  await expect(page.getByRole('status')).toHaveText('Pseudos enregistrés dans GitHub, pour toute l’équipe');
+  expect(github.team().pseudos).toEqual(['', 'Greg', '', '', '']);
+  expect(github.commits.at(-1)).toMatchObject({ id: 'equipe', message: 'Pseudos de l’équipe modifiés depuis l’application' });
   await page.reload();
   await views(page).getByRole('button', { name: 'Greg', exact: true }).click();
   await expect(brief(page).getByRole('heading', { level: 2 })).toHaveText(/Greg/);

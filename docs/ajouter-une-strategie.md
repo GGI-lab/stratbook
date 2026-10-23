@@ -33,7 +33,7 @@ Un brouillon est gardé pendant la saisie : si la page se ferme par erreur, il e
 
 ### Partager
 
-**Partager** envoie un lien lisible avant même de cliquer : stratégie, étape, vue, puis les pseudos (J1 à J5, séparés par des virgules) :
+**Partager** envoie un lien lisible avant même de cliquer : stratégie, étape, vue. Les pseudos n'y sont ajoutés (J1 à J5, séparés par des virgules) que s'il n'y en a pas dans GitHub :
 
 `https://ggi-lab.github.io/stratbook/d2-split-a/etape-2/j2?pseudos=Greg,Alex,,Sam,Zoé`
 
@@ -42,6 +42,10 @@ Un brouillon est gardé pendant la saisie : si la page se ferme par erreur, il e
 - les anciens liens (`?s=d2-split-a&step=2&role=j2&n1=Greg`) marchent toujours.
 
 La stratégie elle-même est lue dans GitHub. Ces adresses n'existent pas en fichiers : GitHub Pages répond avec `404.html`, une copie de l'application générée à la construction (`vite.config.js`).
+
+### Pseudos de l'équipe
+
+Les pseudos (J1 à J5) sont enregistrés dans le dépôt GitHub, fichier `data/equipe.json` : toute l'équipe voit les mêmes, sur tous les appareils, sans les mettre dans le lien. Le bouton **Pseudos** demande l'accès éditeur (même jeton, même mot de passe) ; **Enregistrer** fait un commit. Tant que le fichier n'a aucun pseudo, chacun garde ceux de son appareil.
 
 ### Supprimer
 

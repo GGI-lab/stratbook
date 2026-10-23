@@ -7,3 +7,7 @@ const files = import.meta.glob('@strategies/*.json', { eager: true, query: '?raw
 export const STRATEGY_FILES = Object.values(files).map((text) => ({ text, strategy: JSON.parse(text) }));
 export const STRATEGIES = Object.fromEntries(STRATEGY_FILES.map((f) => [f.strategy.id, f.strategy]));
 export const DEFAULT_STRATEGY_ID = 'd2-split-a';
+
+// Pseudos de l'équipe livrés avec le site (data/equipe.json), mis à jour au démarrage depuis GitHub.
+const teamFiles = import.meta.glob('@data/equipe.json', { eager: true, query: '?raw', import: 'default' });
+export const TEAM_FILE_TEXT = Object.values(teamFiles)[0] ?? null;

@@ -208,3 +208,65 @@ test("écran d'accueil : manifeste et icônes servis", async ({ page, request })
   expect(manifest.display).toBe('standalone');
   for (const icon of manifest.icons) expect((await request.get(new URL(icon.src, manifestUrl).toString())).status(), icon.src).toBe(200);
 });
+
+test.describe('pseudos de l’équipe dans GitHub', () => {
+  test('ami : les pseudos de GitHub s’affichent, le bouton Pseudos demande le mot de passe', async ({ page, github }) => {
+    github.setTeam(['Splat', 'Dark', 'Silent', 'JP', 'Rod']);
+    await page.goto('./?step=2&role=j2');
+    await expect(page.locator('#consignes .b-title')).toHaveText('Dark');
+    await expect(page.locator('[data-view="j5"]')).toContainText('Rod');
+    await page.getByRole('button', { name: 'Pseudos' }).click();
+    await expect(dialog(page)).toContainText('Configurer l’accès éditeur');
+  });
+
+  test('pseudos de GitHub : ils priment sur ceux du lien et de l’appareil, et ne sont plus dans le lien', async ({ page, github, baseURL }) => {
+    github.setTeam(['Splat', 'Dark', '', '', '']);
+    await page.addInitScript(() => localStorage.setItem('stratbook:pseudos', JSON.stringify(['Moi', '', '', '', ''])));
+    await page.goto('./d2-split-a/etape-1/j1?pseudos=Alex');
+    await expect(page.locator('#consignes .b-title')).toHaveText('Splat');
+    const link = await shareLink(page);
+    expect(link).toBe(`${baseURL}d2-split-a/etape-1/j1`);
+  });
+
+  test('pseudos modifiés dans GitHub (sur un autre appareil) : mis à jour à l’ouverture', async ({ page, github }) => {
+    github.setTeam(['Splat', 'Dark', '', '', '']);
+    await page.goto('./?step=1&role=j1');
+    await expect(page.locator('#consignes .b-title')).toHaveText('Splat');
+    github.setTeam(['Ace', 'Dark', '', '', '']);
+    await page.reload();
+    await expect(page.locator('#consignes .b-title')).toHaveText('Ace');
+  });
+
+  test('modification par Greg : fichier changé ailleurs entre-temps, enregistré quand même ; échec affiché', async ({ page, context, github }) => {
+    await asAdmin(context);
+    github.setTeam(['Splat', '', '', '', '']);
+    await page.goto('./?step=1&role=j1');
+    await expect(page.locator('#consignes .b-title')).toHaveText('Splat');
+    github.setTeam(['Autre', '', '', '', '']); // modifié ailleurs, empreinte connue ici périmée
+    await page.getByRole('button', { name: 'Pseudos' }).click();
+    await page.locator('#nick-j1').fill('Ace');
+    await page.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(status(page)).toHaveText('Pseudos enregistrés dans GitHub, pour toute l’équipe');
+    expect(github.team().pseudos[0]).toBe('Ace');
+    await expect(page.locator('#consignes .b-title')).toHaveText('Ace');
+    // Échec (GitHub en panne) : message dans la fenêtre, qui reste ouverte.
+    await page.getByRole('button', { name: 'Pseudos' }).click();
+    await page.locator('#nick-j1').fill('Zed');
+    github.failNext(500);
+    await page.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(page.locator('#nicks-error')).toContainText('Erreur GitHub (500)');
+    await expect(dialog(page)).toBeVisible();
+    expect(github.team().pseudos[0]).toBe('Ace');
+  });
+
+  test('fichier des pseudos absent du dépôt : créé au premier enregistrement', async ({ page, context, github }) => {
+    await asAdmin(context);
+    github.setTeam(null);
+    await page.goto('./');
+    await page.getByRole('button', { name: 'Pseudos' }).click();
+    await page.locator('#nick-j3').fill('Silent');
+    await page.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect(status(page)).toHaveText('Pseudos enregistrés dans GitHub, pour toute l’équipe');
+    expect(github.team().pseudos).toEqual(['', '', 'Silent', '', '']);
+  });
+});

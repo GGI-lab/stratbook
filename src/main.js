@@ -1,7 +1,8 @@
-import { STRATEGIES, STRATEGY_FILES, DEFAULT_STRATEGY_ID } from './strategies.js';
+import { STRATEGIES, STRATEGY_FILES, DEFAULT_STRATEGY_ID, TEAM_FILE_TEXT } from './strategies.js';
+import { createTeamStore, teamHasNames } from './team.js';
 import { createLibrary } from './library.js';
 import { sideOf, frameOf, groupLabel, SIDES } from './model.js';
-import { blobSha, listStrategies, readStrategy, writeStrategy, deleteStrategy, checkAccess } from './github.js';
+import { blobSha, listStrategies, readStrategy, writeStrategy, deleteStrategy, checkAccess, readTeam, writeTeam } from './github.js';
 import { createVault } from './vault.js';
 import { openLayer, closeLayer, swapLayer, whenSettled } from './layers.js';
 import { requestPersist, canOfferInstall, showInstallDialog } from './install.js';
@@ -45,11 +46,15 @@ const session = (() => {
 const store = createStore(storage);
 const library = createLibrary(STRATEGIES, storage);
 const vault = createVault(storage, session); // accès éditeur (jeton GitHub chiffré par mot de passe)
+const team = createTeamStore(storage, TEAM_FILE_TEXT ? { text: TEAM_FILE_TEXT, sha: null } : null); // pseudos (GitHub)
 const MAP_ID = 'dust2'; // une seule carte pour l'instant
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Empreintes Git des fichiers livrés avec le site : comparées à celles de GitHub au démarrage.
 const builtInShas = Promise.all(STRATEGY_FILES.map(async (f) => [f.strategy.id, await blobSha(f.text)]))
-  .then((pairs) => library.setBuiltInShas(Object.fromEntries(pairs)))
+  .then(async (pairs) => {
+    library.setBuiltInShas(Object.fromEntries(pairs));
+    if (TEAM_FILE_TEXT) team.setBuiltInSha(await blobSha(TEAM_FILE_TEXT));
+  })
   .catch(() => {});
 
 // ---------- État ----------
@@ -84,7 +89,12 @@ function syncUrl() {
   whenSettled(() => history.replaceState(history.state, '', buildShareUrl(rootUrl(), state.strategy?.id, urlState())));
 }
 
-const urlState = () => ({ ...state, step: state.strategy && isRecap() ? RECAP : state.step });
+// Pseudos enregistrés dans GitHub : inutile de les mettre dans le lien (tout le monde a les mêmes).
+const urlState = () => ({
+  ...state,
+  step: state.strategy && isRecap() ? RECAP : state.step,
+  nicknames: teamHasNames(team.team()) ? null : state.nicknames,
+});
 
 /** Affiche une stratégie de la bibliothèque. */
 function selectStrategy(id, { step = STEP_MIN } = {}) {
@@ -613,27 +623,74 @@ $('play').addEventListener('click', () => {
   playStep(STEP_MIN, 0); // 0 = position de départ
 });
 
-// ---------- Pseudos ----------
+// ---------- Pseudos (enregistrés dans GitHub, modifiables avec l'accès éditeur) ----------
 const dialog = $('nicks-dialog');
-$('open-nicks').addEventListener('click', () => {
+$('open-nicks').addEventListener('click', async () => {
   stopPlay();
+  if (!(await requireAdmin())) return;
+  $('nicks-error').textContent = '';
   $('nicks-fields').innerHTML = ROLES.map((role, i) => {
     const id = `nick-${role}`;
     const title = state.strategy?.roles[role].title.text;
-    return `<div class="field" style="--c:${PLAYER_COLORS[role]}"><label for="${id}"><span class="view__dot" aria-hidden="true">${roleNumber(role)}</span>J${roleNumber(role)}${title ? `, ${esc(title)}` : ''}</label><input id="${id}" name="${role}" type="text" maxlength="${NICK_MAX}" autocomplete="off" autocapitalize="words" enterkeyhint="next" value="${esc(state.nicknames[i])}" placeholder="J${roleNumber(role)}" /></div>`;
+    return `<div class="field" style="--c:${PLAYER_COLORS[role]}"><label for="${id}"><span class="view__dot" aria-hidden="true">${roleNumber(role)}</span>J${roleNumber(role)}${title ? `, ${esc(title)}` : ''}</label><input id="${id}" name="${role}" type="text" maxlength="${NICK_MAX}" autocomplete="off" autocapitalize="words" enterkeyhint="next" value="${esc(state.nicknames[i] ?? '')}" placeholder="J${roleNumber(role)}" /></div>`;
   }).join('');
   dialog.showModal();
 });
 $('nicks-cancel').addEventListener('click', () => dialog.close());
-$('nicks-form').addEventListener('submit', (e) => {
+$('nicks-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = new FormData(e.target);
   const nicknames = ROLES.map((r) => cleanNickname(form.get(r)));
-  const saved = store.saveNicknames(nicknames);
+  const submit = e.target.querySelector('[type="submit"]');
+  submit.disabled = true;
+  try {
+    if (!(await publishTeam(nicknames))) return; // message dans la fenêtre, on peut réessayer
+  } finally {
+    submit.disabled = false;
+  }
   dialog.close();
+  store.saveNicknames(nicknames); // aussi sur l'appareil (si GitHub est injoignable plus tard)
   setState({ nicknames });
-  toast(saved ? 'Pseudos enregistrés' : 'Pseudos appliqués (stockage indisponible sur ce navigateur)');
+  toast('Pseudos enregistrés dans GitHub, pour toute l’équipe');
 });
+
+/** Publie les pseudos dans GitHub (data/equipe.json). Renvoie true si c'est fait. */
+async function publishTeam(nicknames) {
+  const token = vault.token();
+  const error = (text) => ($('nicks-error').textContent = text);
+  if (!token) return error('Édition verrouillée : déverrouille-la depuis le menu Stratégies.'), false;
+  const data = { pseudos: nicknames, updatedAt: Date.now() };
+  await builtInShas;
+  let sha = team.sha() ?? undefined;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      team.update(data, await writeTeam(fetch, token, data, { sha }));
+      return true;
+    } catch (err) {
+      // Fichier changé ailleurs (ou pas encore connu ici) : on reprend sa version actuelle et on réessaie une fois.
+      if (err.code === 'conflict' && attempt === 0) {
+        try {
+          sha = (await readTeam(fetch, { token }))?.sha ?? undefined;
+          continue;
+        } catch (again) {
+          err = again;
+        }
+      }
+      if (err.code === 'token') vault.lock();
+      error(err.code === 'token' ? `${err.message} Reconfigure l’accès éditeur (menu Stratégies).` : err.message);
+      return false;
+    }
+  }
+  return false;
+}
+
+/** Pseudos enregistrés dans GitHub : ils s'appliquent à tout le monde. Renvoie true si l'affichage change. */
+function applyTeam() {
+  const t = team.team();
+  if (!teamHasNames(t) || JSON.stringify(t.pseudos) === JSON.stringify(state.nicknames)) return false;
+  state.nicknames = [...t.pseudos];
+  return true;
+}
 
 // ---------- Partage ----------
 async function copy(text) {
@@ -687,8 +744,20 @@ async function refreshFromGitHub() {
   try {
     await builtInShas;
     const token = githubToken();
-    const listing = await listStrategies(fetch, { token });
-    return await library.sync(listing, (id) => readStrategy(fetch, id, { token }));
+    const [listing, teamFile] = await Promise.all([listStrategies(fetch, { token }), readTeam(fetch, { token }).catch(() => undefined)]);
+    const changed = await library.sync(listing, (id) => readStrategy(fetch, id, { token }));
+    // Pseudos de l'équipe : nouvelle version sur GitHub ?
+    if (teamFile && teamFile.sha !== team.sha()) {
+      let data = null;
+      try {
+        data = JSON.parse(teamFile.text);
+      } catch {
+        data = null;
+      }
+      if (data) team.update(data, teamFile.sha);
+    }
+    if (applyTeam()) changed.add('pseudos');
+    return changed;
   } catch {
     return new Set(); // hors ligne ou limite atteinte : la version livrée avec le site reste affichée
   }
@@ -709,6 +778,11 @@ function applyRemoteChanges(changed) {
     render({ from: null });
     toast('Stratégie mise à jour');
   } else if (!cur) setSide(state.side);
+  else if (changed.has('pseudos')) {
+    // Pseudos de l'équipe modifiés dans GitHub.
+    syncUrl();
+    render({ from: null });
+  }
   if (!$('strat-menu').hidden) renderMenu();
 }
 
@@ -906,6 +980,7 @@ async function init() {
   if (initial.adoptLinkNicknames) store.saveNicknames(initial.nicknames);
   state.view = initial.view;
   state.nicknames = initial.nicknames;
+  applyTeam(); // pseudos enregistrés dans GitHub (version connue sur l'appareil) : ils priment
 
   let id = params.strategyId;
   let message = '';

@@ -19,7 +19,7 @@ Chaque envoi sur `main` publie le site via GitHub Actions, y compris les commits
 
 - `strategies/` : stratégies du dépôt (JSON), détectées automatiquement. Voir `docs/ajouter-une-strategie.md`.
 - `src/library.js`, `src/model.js` : bibliothèque (stratégies du site, version à jour de GitHub, anciennes stratégies du téléphone), modèle et nettoyage des données.
-- `src/github.js` : stratégies lues et écrites dans ce dépôt par l'API GitHub (un commit par enregistrement ou suppression).
+- `src/github.js` : stratégies (`strategies/`) et pseudos de l'équipe (`data/equipe.json`, `src/team.js`) lus et écrits dans ce dépôt par l'API GitHub (un commit par enregistrement ou suppression).
 - `src/vault.js` : accès éditeur, jeton GitHub chiffré par mot de passe sur l'appareil.
 - `src/install.js`, `public/manifest.webmanifest`, `public/icons/` : installation sur l'écran d'accueil. Icônes générées depuis `assets-src/icone-source.png` par `python3 scripts/icons.py`.
 - `src/layers.js` : bouton retour du téléphone (ferme le menu ou l'éditeur au lieu de quitter le site).
