@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, asAdmin } from './helpers.js';
 
 const steps = (page) => page.getByRole('navigation', { name: 'Étapes de la stratégie' });
 const svg = (page) => page.locator('#map svg');

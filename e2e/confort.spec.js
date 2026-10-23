@@ -1,9 +1,8 @@
 // Confort d'usage : bouton retour du téléphone, zones de toucher des jetons, bouton Lecture.
-import { test, expect } from '@playwright/test';
-import { skipInstallPrompt, toScreen } from './helpers.js';
+import { test, expect, asAdmin, toScreen } from './helpers.js';
 
 test.beforeEach(async ({ context }) => {
-  await skipInstallPrompt(context);
+  await asAdmin(context);
 });
 
 const onSite = (page) => expect(page).toHaveURL(/\/stratbook\/\?s=d2-split-a/);

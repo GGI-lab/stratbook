@@ -51,9 +51,6 @@ export function parseParams(search) {
   if (strategyId && /^[a-z0-9][a-z0-9-]{0,63}$/.test(strategyId)) out.strategyId = strategyId;
   const side = p.get('side');
   if (side === 't' || side === 'ct') out.side = side;
-  // Stratégie complète jointe au lien (créée ou modifiée dans l'application).
-  const data = p.get('d');
-  if (data) out.data = data;
   return out;
 }
 
@@ -75,9 +72,9 @@ export function resolveInitial(params, stored) {
 /**
  * Construit le lien partageable de la vue courante.
  * Sans stratégie (side sans stratégie), le lien garde le side choisi.
- * `data` : stratégie encodée (src/codec.js), jointe quand elle n'existe que sur ce téléphone.
+ * Lien toujours court : la stratégie est dans le dépôt GitHub, seul son id voyage.
  */
-export function buildShareUrl(baseUrl, strategyId, { step, view, nicknames, side }, { data } = {}) {
+export function buildShareUrl(baseUrl, strategyId, { step, view, nicknames, side }) {
   const url = new URL(baseUrl);
   url.search = '';
   url.hash = '';
@@ -91,7 +88,6 @@ export function buildShareUrl(baseUrl, strategyId, { step, view, nicknames, side
   (nicknames ?? []).forEach((n, i) => {
     if (n) url.searchParams.set(`n${i + 1}`, n);
   });
-  if (data) url.searchParams.set('d', data);
   return url.toString();
 }
 

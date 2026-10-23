@@ -2,15 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { sideOf, createStrategy, sanitizeStrategy, groupLabel, buildGroups, ROLES } from '../src/model.js';
-import { createLibrary } from '../src/library.js';
-import { encodeStrategy, decodeStrategy } from '../src/codec.js';
 
 const splitA = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
 
-function memoryStorage() {
-  const data = new Map();
-  return { getItem: (k) => (data.has(k) ? data.get(k) : null), setItem: (k, v) => data.set(k, String(v)), removeItem: (k) => data.delete(k) };
-}
 
 test('side : Terro donne t, CT ou Anti-terro donnent ct', () => {
   assert.equal(sideOf(splitA), 't');
@@ -59,55 +53,6 @@ test('libellés de groupe : ceux de la stratégie, sinon ceux par défaut', () =
   const s = createStrategy({ side: 't' });
   s.roles.j5.group = 'mid';
   assert.deepEqual(buildGroups(s).find((g) => g.id === 'mid').players, ['j5']);
-});
-
-test("bibliothèque : dépôt + stratégies locales, filtre par side, modification et retour à l'original", () => {
-  const storage = memoryStorage();
-  const lib = createLibrary({ [splitA.id]: splitA }, storage);
-  assert.deepEqual(lib.list({ side: 'ct' }), []);
-  const ct = createStrategy({ side: 'ct' });
-  ct.title.text = 'Retake B';
-  assert.equal(lib.save(ct), true);
-  assert.deepEqual(lib.list({ side: 'ct' }).map((s) => s.title.text), ['Retake B']);
-  assert.equal(lib.origin(ct.id), 'local');
-
-  const modified = structuredClone(splitA);
-  modified.title.text = 'Split A modifié';
-  lib.save(modified);
-  assert.equal(lib.origin(splitA.id), 'modified');
-  // Relu depuis le stockage par une nouvelle instance (rechargement de la page).
-  const again = createLibrary({ [splitA.id]: splitA }, storage);
-  assert.equal(again.get(splitA.id).title.text, 'Split A modifié');
-  assert.equal(again.get(ct.id).title.text, 'Retake B');
-  again.remove(splitA.id);
-  assert.equal(again.origin(splitA.id), 'builtin');
-  assert.equal(again.get(splitA.id).title.text, 'Split A, 3 Long + 2 Short');
-});
-
-test('bibliothèque : stockage indisponible, tout reste en mémoire', () => {
-  const broken = {
-    getItem() {
-      throw new Error('bloqué');
-    },
-    setItem() {
-      throw new Error('bloqué');
-    },
-  };
-  const lib = createLibrary({ [splitA.id]: splitA }, broken);
-  const s = createStrategy({ side: 't' });
-  assert.equal(lib.save(s), false);
-  assert.ok(lib.get(s.id));
-});
-
-test('lien : la stratégie encodée revient identique (hors sources) et reste courte', async () => {
-  const code = await encodeStrategy(splitA);
-  assert.match(code, /^[zj][A-Za-z0-9_-]+$/);
-  assert.ok(code.length < 4000, `${code.length} caractères`);
-  const back = sanitizeStrategy(await decodeStrategy(code));
-  const strip = (s) => JSON.stringify(s, (k, v) => (k === 'source' ? undefined : v));
-  assert.deepEqual(JSON.parse(strip(back)), JSON.parse(strip(splitA)));
-  assert.equal(await decodeStrategy('zpas-du-deflate'), null);
-  assert.equal(await decodeStrategy('xabc'), null);
 });
 
 test('rôles : toujours les 5 joueurs', () => {

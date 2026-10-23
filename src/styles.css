@@ -235,8 +235,10 @@ button { font: inherit; color: inherit; }
 
 /* Animation : tracés et utilitaires masqués pendant le déplacement, puis réaffichés. */
 .board__map svg .moves,
+.board__map svg .move-casings,
 .board__map svg .utilities { transition: opacity 0.25s ease-out; }
 .board__map svg.is-moving .moves,
+.board__map svg.is-moving .move-casings,
 .board__map svg.is-moving .utilities { opacity: 0; transition: none; }
 
 /* Bouton Lecture : dans le coin haut du volet des consignes, hors de la carte (il cachait le spawn T).
@@ -872,3 +874,12 @@ body[data-mode="edit"] .skip { display: none !important; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- Accès éditeur (mot de passe) ---------- */
+.admin .field { --c: var(--text); }
+.admin__error { color: var(--danger); font-size: 14px; font-weight: 600; min-height: 0; }
+.admin__error:empty { display: none; }
+.admin__help { font-size: 14px; color: var(--text-muted); }
+.admin__help summary { cursor: pointer; min-height: var(--touch); display: flex; align-items: center; font-weight: 600; color: var(--text); }
+.admin__help ol { display: grid; gap: var(--space-1); padding-left: 1.4em; list-style: decimal; }
+.admin .ed-link { justify-self: center; }

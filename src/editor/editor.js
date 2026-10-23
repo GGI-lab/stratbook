@@ -67,11 +67,13 @@ const groupOptions = (list, selected) =>
  * @param {object} opts
  * @param {object|null} opts.strategy  stratégie à modifier, null pour en créer une
  * @param {'t'|'ct'} opts.side         side d'une nouvelle stratégie
- * @param {object} opts.library        bibliothèque (src/library.js)
+ * @param {'repo'|'local'|null} opts.origin  dans le dépôt GitHub, seulement sur ce téléphone, ou nouvelle
+ * @param {(s: object) => Promise<boolean>} opts.publish  publie dans GitHub (true si c'est fait)
+ * @param {(s: object) => Promise<boolean>} opts.remove   supprime du dépôt (true si c'est fait)
  * @param {Function} opts.onClose      appelée avec { savedId, step } ou { deletedId, step } ou {}
  * @param {number} [opts.step]         étape affichée à l'ouverture
  */
-export function openEditor({ strategy, side, library, onClose, step = 1 }) {
+export function openEditor({ strategy, side, origin = null, publish, remove, onClose, step = 1 }) {
   const isNew = !strategy;
   const key = isNew ? `new:${side}` : strategy.id;
   let draft = isNew ? createStrategy({ mapId: 'dust2', side }) : prepareDraft(strategy);
@@ -93,9 +95,10 @@ export function openEditor({ strategy, side, library, onClose, step = 1 }) {
     frame: map.viewBox,
     key,
     isNew,
-    library,
+    publish,
+    remove,
     onClose,
-    origin: isNew ? null : library.origin(strategy.id),
+    origin: isNew ? null : origin,
     step: Math.min(Math.max(1, step), draft.steps.length), // l'éditeur s'ouvre sur l'étape affichée
     selected: null, // { kind: 'player', role } ou { kind: 'utility', index }
     placing: null, // utilitaire en attente d'un toucher sur la carte : { type, by }
@@ -253,7 +256,7 @@ export async function editorBack() {
 function renderBody() {
   const d = ctx.draft;
   const side = sideKey();
-  const canRemove = ctx.origin === 'local' || ctx.origin === 'modified';
+  const canRemove = !ctx.isNew;
   $('editor-body').innerHTML = `
     <section class="ed-card" aria-label="Général">
       <div class="ed-field">
@@ -302,13 +305,8 @@ function renderBody() {
     </section>
 
     <section class="ed-card ed-more" aria-label="Autres actions">
-      <button type="button" class="btn btn--ghost" id="ed-export">Télécharger le fichier (.json)</button>
-      <p class="ed-note">Pour l'ajouter au dépôt et la rendre visible par tous, sans lien.</p>
-      ${
-        canRemove
-          ? `<button type="button" class="btn btn--ghost btn--danger-text" id="ed-remove">${ctx.origin === 'modified' ? 'Revenir à la version d’origine' : 'Supprimer la stratégie'}</button>`
-          : ''
-      }
+      <p class="ed-note">« Enregistrer » publie la stratégie dans le dépôt GitHub : tes amis la voient avec le lien.</p>
+      ${canRemove ? `<button type="button" class="btn btn--ghost btn--danger-text" id="ed-remove">Supprimer la stratégie</button>` : ''}
     </section>`;
 }
 
@@ -793,34 +791,37 @@ async function onClick(e) {
     renderTools();
     return;
   }
-  if (btn.id === 'ed-export') return exportFile();
   if (btn.id === 'ed-remove') {
-    const modified = ctx.origin === 'modified';
+    const local = ctx.origin === 'local';
     const ok = await confirmDialog({
-      title: modified ? 'Revenir à la version d’origine ?' : 'Supprimer la stratégie ?',
-      text: modified ? 'Tes modifications sur ce téléphone seront effacées.' : 'Elle sera effacée de ce téléphone. Les liens déjà envoyés restent valables.',
-      ok: modified ? 'Revenir' : 'Supprimer',
+      title: 'Supprimer la stratégie ?',
+      text: local
+        ? 'Elle n’est que sur ce téléphone : elle sera effacée.'
+        : 'Elle sera supprimée du dépôt GitHub, pour tout le monde. Les liens déjà envoyés ne l’ouvriront plus.',
+      ok: 'Supprimer',
       danger: true,
     });
     if (!ok || !ctx) return;
-    const id = d.id;
-    ctx.library.remove(id);
+    const { id } = d;
+    const step = Math.max(1, ctx.step);
+    if (!(await busy(btn, 'Suppression…', () => ctx.remove({ id, title: d.title }))) || !ctx) return;
     clearDraft();
-    close({ deletedId: id, step: Math.max(1, ctx.step) });
-    toast(modified ? 'Version d’origine rétablie' : 'Stratégie supprimée');
+    close({ deletedId: id, step });
   }
 }
 
-function exportFile() {
-  const s = finalizeDraft(ctx.draft, ctx.map);
-  if (!s.title.text) s.title = txt('Sans titre');
-  s.updatedAt = Date.now();
-  const blob = new Blob([`${JSON.stringify(s, null, 2)}\n`], { type: 'application/json' });
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `${s.id}.json` });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+/** Bouton occupé pendant un appel à GitHub (évite le double envoi). Renvoie le résultat de l'appel. */
+async function busy(button, label, fn) {
+  const text = button.textContent;
+  const buttons = [$('ed-save'), $('ed-cancel'), button];
+  buttons.forEach((b) => (b.disabled = true));
+  button.textContent = label;
+  try {
+    return await fn();
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+    button.textContent = text;
+  }
 }
 
 async function save() {
@@ -831,18 +832,16 @@ async function save() {
     if (errors[0].field === 'title') $('ed-title').focus();
     return;
   }
-  const s = finalizeDraft(ctx.draft, ctx.map);
-  s.updatedAt = Date.now(); // date de cette version : sert quand deux versions se croisent
-  let persisted = false;
-  try {
-    persisted = ctx.library.save(s);
-  } catch {
+  const s = sanitizeStrategy({ ...finalizeDraft(ctx.draft, ctx.map), updatedAt: Date.now() });
+  if (!s) {
     toast('Enregistrement impossible : stratégie invalide');
     return;
   }
+  // Publication dans GitHub ; en cas d'échec l'éditeur reste ouvert (brouillon gardé), on peut réessayer.
+  const step = Math.max(1, ctx.step);
+  if (!(await busy($('ed-save'), 'Publication…', () => ctx.publish(s))) || !ctx) return;
   clearDraft();
-  close({ savedId: s.id, step: Math.max(1, ctx.step) }); // retour à l'étape en cours de modification
-  toast(persisted ? 'Stratégie enregistrée' : 'Stratégie gardée jusqu’à la fermeture (stockage indisponible)');
+  close({ savedId: s.id, step }); // retour à l'étape en cours de modification
 }
 
 async function cancel() {

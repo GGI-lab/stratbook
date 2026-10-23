@@ -1,6 +1,16 @@
 # Ajouter une stratégie
 
-Deux façons de faire : directement dans l'application (le plus simple), ou en ajoutant un fichier JSON au dépôt.
+Toutes les stratégies sont dans le dépôt GitHub, dossier `strategies/` (un fichier JSON par stratégie). Deux façons de les créer ou de les modifier : dans l'application (le plus simple, chaque enregistrement fait un commit), ou en déposant un fichier à la main.
+
+## Accès éditeur (Greg seulement)
+
+Créer, modifier et supprimer des stratégies est réservé à Greg. Les amis voient les stratégies mais pas les actions d'édition.
+
+1. Créer un jeton GitHub : photo de profil, **Settings**, **Developer settings**, **Personal access tokens**, **Fine-grained tokens**, **Generate new token**. **Repository access** : seulement `GGI-lab/stratbook`. **Permissions** : **Contents**, **Read and write**, rien d'autre. Choisir une durée de validité.
+2. Dans l'application : menu **Stratégies**, **Modifier les stratégies**. La première fois sur un appareil : coller le jeton et choisir un mot de passe (8 caractères au moins). Ensuite : mot de passe seul.
+3. **Verrouiller l'édition** (menu) referme l'accès ; il se referme aussi en fermant l'onglet.
+
+Le jeton est gardé chiffré par le mot de passe sur l'appareil (AES-GCM, clé dérivée par PBKDF2) ; il n'est jamais écrit dans le dépôt, qui est public. La vraie protection est le jeton : sans lui, personne ne peut écrire dans le dépôt, même en contournant l'écran du mot de passe. Jeton perdu ou volé : le révoquer sur GitHub, en créer un autre, puis **Oublier l'accès de cet appareil** et le reconfigurer.
 
 ## Dans l'application
 
@@ -17,31 +27,27 @@ Deux façons de faire : directement dans l'application (le plus simple), ou en a
    - **Défaire / Refaire** (flèches sous la carte, ou Ctrl+Z / Ctrl+Maj+Z sur ordinateur) annule ou rétablit la dernière action : jeton, regard, point de passage, utilitaire, étape, texte.
    - Sur téléphone, la carte reste en haut de l'écran pendant qu'on écrit les consignes de l'étape ; elle se réduit quand le clavier est ouvert.
 6. **Rôles des joueurs** : groupe, rôle, résumé et utilitaires de chacun (affichés dans sa vue, à toutes les étapes).
-7. **Enregistrer**. La stratégie est gardée sur ce téléphone (badge « Perso » dans le menu, « Modifiée » pour une stratégie du dépôt changée ici).
+7. **Enregistrer** publie la stratégie dans le dépôt GitHub (un commit, fichier `strategies/<id>.json`). Elle est visible tout de suite par tes amis avec le lien (l'application lit GitHub au démarrage) ; le site lui-même est mis à jour en une minute environ. Si la publication échoue (réseau, jeton), l'éditeur reste ouvert pour réessayer. Si la stratégie a été changée ailleurs entre-temps (autre appareil), l'application demande avant de remplacer.
 
 Un brouillon est gardé pendant la saisie : si la page se ferme par erreur, il est proposé à la réouverture de l'éditeur. Le bouton retour du téléphone fait comme **Annuler** (confirmation s'il y a des changements).
 
 ### Partager
 
-**Partager** joint la stratégie au lien. L'ami qui l'ouvre la retrouve dans son menu, même après fermeture. Il n'y a pas de serveur : une stratégie créée ici n'existe que sur les téléphones qui ont ouvert le lien ou importé son fichier. Pour la rendre visible par tous sans lien, l'ajouter au dépôt (ci-dessous).
+**Partager** envoie un lien court : l'id de la stratégie, l'étape, la vue et les pseudos (`?s=d2-split-a&step=2&role=j2&n1=Greg`). La stratégie elle-même est lue dans GitHub.
 
-- Stratégie du dépôt modifiée : le lien ne contient que les changements (quelques centaines de caractères).
-- Stratégie perso : le lien la contient entière (de 1 à 3 Ko environ). Au-delà de 2 000 caractères (limite d'un message Discord sans Nitro), l'application prévient et propose **Envoyer le fichier** ; l'ami l'ouvre avec **Importer un fichier** dans le menu Stratégies.
-- Chaque version enregistrée est datée. Si l'ami (ou toi, avec un ancien lien) a déjà une version différente de la même stratégie, l'application demande : **Garder les deux** (la version reçue arrive avec « (reçue) » dans son titre), **Remplacer la mienne** ou **Garder la mienne**. Une version reçue jamais retouchée est remplacée sans question par une version plus récente.
+### Supprimer
 
-### Garder ses stratégies
+**Supprimer la stratégie** (en bas de l'éditeur) retire le fichier du dépôt, pour tout le monde (un commit). Les liens déjà envoyés ne l'ouvrent plus.
 
-Elles sont gardées dans le navigateur du téléphone. Safari efface les données d'un site qu'on n'ouvre pas pendant 7 jours d'utilisation de Safari ; une app ajoutée à l'écran d'accueil n'est pas concernée. Après le premier enregistrement, l'application propose donc de l'ajouter à l'écran d'accueil (aussi dans le menu : **Ajouter à l'écran d'accueil**). Sur iPhone, l'app installée a son propre stockage, séparé de Safari : **Sauvegarder toutes mes stratégies** dans Safari, puis **Importer un fichier** dans l'app.
+### Anciennes stratégies du téléphone
 
-**Sauvegarder toutes mes stratégies** (menu Stratégies) crée un fichier avec toutes les stratégies du téléphone ; **Importer un fichier** les remet (sur ce téléphone ou un autre).
-
-**Revenir à la version d'origine** efface les modifications locales d'une stratégie du dépôt. **Supprimer la stratégie** efface une stratégie perso de ce téléphone.
+Les stratégies créées avant l'enregistrement dans GitHub sont restées sur le téléphone qui les a créées (badge « Sur ce téléphone »). Greg les publie avec **Publier les stratégies de ce téléphone** (menu Stratégies, accès déverrouillé).
 
 ## Dans le dépôt
 
-1. Dans l'éditeur, **Télécharger le fichier (.json)**, ou copier `strategies/d2-split-a.json` sous un nouveau nom.
+1. Copier `strategies/d2-split-a.json` sous un nouveau nom.
 2. Déposer le fichier dans `strategies/`. Le nom du fichier doit être l'id (`"id": "d2-ct-retake-b"` → `d2-ct-retake-b.json`). C'est l'identifiant du lien : `?s=d2-ct-retake-b`.
-3. Lancer `npm test`. Les tests signalent ce qui manque. Une stratégie du dépôt doit avoir 3 à 5 étapes et un plan d'équipe à chaque étape ; chaque texte porte une source : `"pdf"` s'il vient du document de la strat, `"ajout"` sinon.
+3. Lancer `npm test`. Les tests vérifient que le fichier est bien formé (le même contrôle que pour une stratégie publiée depuis l'application) : 1 à 5 étapes, 5 rôles, positions dans la carte, trajets continus, chaque texte avec une source (`"pdf"` s'il vient du document de la strat, `"ajout"` sinon). Un fichier mal formé bloque la mise en ligne.
 
 ### Format (rappel)
 

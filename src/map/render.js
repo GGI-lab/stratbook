@@ -80,6 +80,33 @@ export function utilityPoint(u, zoneById) {
   return [z.anchor[0] + (u.dx ?? 0), z.anchor[1] + (u.dy ?? 0)];
 }
 
+const samePoint = (a, b) => a && b && a[0] === b[0] && a[1] === b[1];
+
+/**
+ * Tracés à dessiner : [{ role, pace, points }].
+ * Étape seule : un tracé par joueur qui bouge. Récap : les trajets de chaque joueur mis bout à bout
+ * en un seul tracé continu (un nouveau tracé ne commence que si l'allure change : course / shift).
+ */
+export function strokesOf(strategy, shown, recap = false) {
+  const out = [];
+  for (const role of Object.keys(strategy.roles)) {
+    let current = null;
+    for (const st of shown) {
+      // Trajet de l'étape : tracé dessiné, ou ligne droite si le joueur change de place sans tracé
+      // (c'est ce que fait l'animation) ; rien s'il reste sur place.
+      const points = segmentRoute(strategy, st.n, role);
+      if (points.length < 2 || samePoint(points[0], points.at(-1))) continue;
+      const pace = st.map.moves.find((m) => m.role === role)?.pace ?? 'run';
+      if (recap && current && current.pace === pace && samePoint(current.points.at(-1), points[0])) current.points.push(...points.slice(1));
+      else {
+        current = { role, pace, points: [...points] };
+        out.push(current);
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * @param {object} strategy  données de la stratégie (JSON)
  * @param {number} stepN     numéro d'étape (1 à 4)
@@ -106,9 +133,9 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
   const m = step.map;
   const recap = Boolean(opts.recap);
   const hit = opts.hitArea !== false ? `<circle class="player__hit" r="${R_HIT}" fill="transparent"/>` : '';
-  // Récap : tous les trajets (chacun avec l'étape qui le définit) et tous les utilitaires.
+  // Récap : tous les trajets (un seul tracé continu par joueur) et tous les utilitaires.
   const shown = recap ? strategy.steps.filter((s) => s.n <= stepN) : [step];
-  const allMoves = shown.flatMap((s) => s.map.moves.map((mv) => ({ ...mv, n: s.n })));
+  const allStrokes = strokesOf(strategy, shown, recap);
   const allUtils = shown.flatMap((s) => s.map.utilities);
   // Identifiant unique pour que plusieurs cartes puissent cohabiter dans une même page.
   const uid = `${opts.uid ?? 's'}${stepN}${recap ? 'r' : ''}-${focus ?? 'equipe'}`;
@@ -135,11 +162,20 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
     .join('');
 
   // Le trait relie la position de l'étape précédente au joueur, sans flèche : il touche la pastille.
-  const moves = allMoves
-    .map(({ role, pace = 'run', n }) => {
-      const d = smoothPath(segmentRoute(strategy, n, role));
-      return `<g class="move" data-role="${role}" data-pace="${pace}"${dim(role)}><path d="${d}" fill="none" stroke="${C.bg}" stroke-width="${r1((STROKE + 4) * k)}" stroke-linecap="round" stroke-dasharray="${dash(pace)}" opacity="0.7"/><path d="${d}" fill="none" stroke="${PLAYER_COLORS[role]}" stroke-width="${r1(STROKE * k)}" stroke-linecap="round" stroke-dasharray="${dash(pace)}"/></g>`;
-    })
+  // Tous les contours sombres d'abord, puis tous les traits de couleur : un contour ne passe jamais
+  // par-dessus un trait (sinon le tracé paraît coupé là où deux morceaux se rejoignent).
+  const paths = allStrokes.map((st) => ({ ...st, d: smoothPath(st.points) }));
+  const casings = paths
+    .map(
+      ({ role, pace, d }) =>
+        `<path data-role="${role}" d="${d}" fill="none" stroke="${C.bg}" stroke-width="${r1((STROKE + 4) * k)}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dash(pace)}" opacity="0.7"${dim(role)}/>`,
+    )
+    .join('');
+  const moves = paths
+    .map(
+      ({ role, pace, d }) =>
+        `<g class="move" data-role="${role}" data-pace="${pace}"${dim(role)}><path d="${d}" fill="none" stroke="${PLAYER_COLORS[role]}" stroke-width="${r1(STROKE * k)}" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="${dash(pace)}"/></g>`,
+    )
     .join('');
 
   const utils = allUtils
@@ -164,5 +200,5 @@ export function renderStepSvg(strategy, stepN, opts = {}) {
 
   const vb = `${VIEWBOX.x} ${VIEWBOX.y} ${VIEWBOX.width} ${VIEWBOX.height}`;
   const { width, height } = BACKGROUND;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" data-k="${k}" role="img" aria-label="Plan de ${esc(map.name)}, ${recap ? 'récap de la stratégie' : `étape ${stepN}`}" font-family="Inter, system-ui, sans-serif"><defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb}" data-k="${k}" role="img" aria-label="Plan de ${esc(map.name)}, ${recap ? 'récap de la stratégie' : `étape ${stepN}`}" font-family="Inter, system-ui, sans-serif"><defs>${coneDefs}</defs><g aria-hidden="true"><rect x="0" y="0" width="${width}" height="${height}" fill="${C.bg}"/><image href="${esc(href)}" x="0" y="0" width="${width}" height="${height}" preserveAspectRatio="none" opacity="0.75"/></g><g class="cones">${cones}</g><g class="move-casings">${casings}</g><g class="moves">${moves}</g><g class="utilities">${utils}</g><g class="players">${players}</g></svg>`;
 }

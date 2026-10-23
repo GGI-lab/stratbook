@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, asAdmin } from './helpers.js';
 
 // Gestes tactiles simulés par des événements pointeur (deux doigts).
 async function touch(page, type, id, x, y) {

@@ -1,16 +1,16 @@
-import { STRATEGIES, DEFAULT_STRATEGY_ID } from './strategies.js';
+import { STRATEGIES, STRATEGY_FILES, DEFAULT_STRATEGY_ID } from './strategies.js';
 import { createLibrary } from './library.js';
-import { sideOf, frameOf, groupLabel, stampOf, SIDES } from './model.js';
-import { encodeStrategy, decodeStrategy } from './codec.js';
-import { incomingAction, copyOf, linkPayload, expandPayload, normalize, backupData, readImport } from './sync.js';
+import { sideOf, frameOf, groupLabel, SIDES } from './model.js';
+import { blobSha, listStrategies, readStrategy, writeStrategy, deleteStrategy, checkAccess } from './github.js';
+import { createVault } from './vault.js';
 import { openLayer, closeLayer, swapLayer, whenSettled } from './layers.js';
-import { requestPersist, shouldOfferInstall, canOfferInstall, showInstallDialog } from './install.js';
+import { requestPersist, canOfferInstall, showInstallDialog } from './install.js';
 import { renderStepSvg, PLAYER_COLORS, R_HIT, scaleFor } from './map/render.js';
 import { getMap, MAPS } from './map/maps.js';
 import { animateTransition } from './map/animate.js';
 import { attachZoom } from './map/zoom.js';
 import { openEditor, editorBack } from './editor/editor.js';
-import { $, esc, toast, choiceDialog, saveFile, pickFile, svgPoint } from './ui.js';
+import { $, esc, toast, choiceDialog, svgPoint } from './ui.js';
 import {
   ROLES,
   TEAM,
@@ -35,14 +35,22 @@ const storage = (() => {
     return undefined;
   }
 })();
+const session = (() => {
+  try {
+    return globalThis.sessionStorage;
+  } catch {
+    return undefined;
+  }
+})();
 const store = createStore(storage);
 const library = createLibrary(STRATEGIES, storage);
+const vault = createVault(storage, session); // accès éditeur (jeton GitHub chiffré par mot de passe)
 const MAP_ID = 'dust2'; // une seule carte pour l'instant
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const touchDevice = () => matchMedia('(pointer: coarse)').matches;
-// Au-delà, un lien ne passe pas dans un message Discord sans Nitro (2 000 caractères).
-const LINK_MAX = 2000;
-const nf = (n) => n.toLocaleString('fr-FR');
+// Empreintes Git des fichiers livrés avec le site : comparées à celles de GitHub au démarrage.
+const builtInShas = Promise.all(STRATEGY_FILES.map(async (f) => [f.strategy.id, await blobSha(f.text)]))
+  .then((pairs) => library.setBuiltInShas(Object.fromEntries(pairs)))
+  .catch(() => {});
 
 // ---------- État ----------
 const state = { strategy: null, side: 't', step: 1, view: TEAM, nicknames: [] };
@@ -56,7 +64,6 @@ const posStep = () => Math.min(state.step, stepLast); // étape dont la carte mo
 const toStep = (n) => clampStep(n, recapStep());
 let imageHref = '';
 const zoom = attachZoom($('map'), frame);
-const shareData = {}; // stratégie encodée pour le lien, par id (calculée à l'avance : le partage reste immédiat)
 const lastBySide = {};
 
 function setState(patch, { focusBrief = false } = {}) {
@@ -96,13 +103,7 @@ function selectStrategy(id, { step = STEP_MIN } = {}) {
   shownStep = null;
   lastBySide[state.side] = id;
   library.setLast(id);
-  // Une stratégie qui n'existe que sur ce téléphone voyage dans le lien de partage.
-  if (library.isLocalCopy(id)) encodeStrategy(payloadOf(s)).then((v) => (shareData[id] = v));
-  else delete shareData[id];
 }
-
-/** Contenu du lien : différences avec l'original pour une stratégie du dépôt modifiée (lien court). */
-const payloadOf = (s) => linkPayload(s, library.origin(s.id) === 'modified' ? library.builtIn(s.id) : null);
 
 /** Change de side : dernière stratégie vue de ce side, sinon la première, sinon écran vide. */
 function setSide(side) {
@@ -147,7 +148,7 @@ function renderHeader() {
   btn.setAttribute('aria-label', `Side : ${side.label}. Passer côté ${other.label}`);
 }
 
-const ORIGIN_TAG = { local: 'Perso', modified: 'Modifiée' };
+const ORIGIN_TAG = { local: 'Sur ce téléphone' };
 
 function renderMenu() {
   const side = SIDES[state.side];
@@ -162,9 +163,15 @@ function renderMenu() {
         })
         .join('')
     : `<li class="menu__empty">Aucune stratégie ${esc(side.label)} pour l'instant.</li>`;
+  // Édition réservée à Greg : actions visibles une fois l'accès éditeur déverrouillé.
+  const admin = vault.isUnlocked();
+  const pending = library.pendingLocal().length;
+  $('menu-admin').hidden = !admin;
+  $('menu-locked').hidden = admin;
   $('menu-new-label').textContent = `Nouvelle stratégie ${side.short}`;
   $('menu-edit').hidden = !state.strategy;
-  $('menu-backup').hidden = library.localList().length === 0;
+  $('menu-publish').hidden = !pending;
+  $('menu-publish-label').textContent = `Publier les stratégies de ce téléphone (${pending})`;
   $('menu-install').hidden = !canOfferInstall();
 }
 
@@ -174,7 +181,7 @@ function openMenu() {
   $('strat-menu').hidden = false;
   $('open-list').setAttribute('aria-expanded', 'true');
   openLayer('menu', () => closeMenu({ fromBack: true }));
-  ($('menu-list').querySelector('[aria-current]') ?? $('menu-list').querySelector('button') ?? $('menu-new')).focus();
+  ($('menu-list').querySelector('[aria-current]') ?? $('menu-list').querySelector('button') ?? $('strat-menu').querySelector('.menu__action:not([hidden])')).focus();
 }
 
 /** keepEntry : l'écran suivant (éditeur) reprend l'entrée d'historique du menu. */
@@ -195,25 +202,30 @@ $('menu-list').addEventListener('click', (e) => {
   syncUrl();
   render({ from: null });
 });
-$('menu-new').addEventListener('click', () => {
+// L'éditeur reprend l'entrée d'historique du menu ; si l'accès est refusé, le menu la rend.
+async function editFromMenu(strategy) {
   closeMenu({ keepEntry: true });
-  startEditor(null);
-});
-$('menu-edit').addEventListener('click', () => {
-  closeMenu({ keepEntry: true });
-  startEditor(state.strategy);
-});
-$('menu-import').addEventListener('click', () => {
+  if (await requireAdmin()) startEditor(strategy);
+  else closeLayer('menu');
+}
+$('menu-new').addEventListener('click', () => editFromMenu(null));
+$('menu-edit').addEventListener('click', () => editFromMenu(state.strategy));
+$('menu-unlock').addEventListener('click', async () => {
   closeMenu();
-  importFile();
+  if (await requireAdmin()) openMenu(); // les actions d'édition apparaissent
 });
-$('menu-backup').addEventListener('click', () => {
+$('menu-lock').addEventListener('click', () => {
+  vault.lock();
+  closeMenu({ focus: true });
+  toast('Édition verrouillée');
+});
+$('menu-publish').addEventListener('click', () => {
   closeMenu();
-  backupAll();
+  publishPending();
 });
 $('menu-install').addEventListener('click', () => {
   closeMenu();
-  offerInstall();
+  showInstallDialog({ storage, admin: vault.isSetUp() });
 });
 document.addEventListener('pointerdown', (e) => {
   if (!e.target.closest('#strat-menu, #open-list')) closeMenu();
@@ -226,7 +238,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 $('side').addEventListener('click', () => setSide(state.side === 't' ? 'ct' : 't'));
-$('empty-new').addEventListener('click', () => startEditor(null));
+$('empty-new').addEventListener('click', async () => {
+  if (await requireAdmin()) startEditor(null);
+});
 
 // ---------- Éditeur ----------
 // Retour du téléphone dans l'éditeur : comme « Annuler » (confirmation si des changements seraient perdus).
@@ -246,23 +260,21 @@ function startEditor(strategy) {
     strategy,
     side: state.side,
     step: strategy ? posStep() : 1,
-    library,
+    origin: strategy ? library.origin(strategy.id) : null,
+    publish,
+    remove: removeStrategy,
     onClose: ({ savedId = null, deletedId = null, step = STEP_MIN } = {}) => {
       document.body.dataset.mode = 'view';
       closeLayer('editor'); // sans effet si on sort par le bouton retour (entrée déjà retirée)
       if (savedId) selectStrategy(savedId, { step });
       else if (deletedId) {
-        if (library.has(deletedId)) selectStrategy(deletedId, { step }); // stratégie du dépôt : retour à l'original
-        else {
-          state.strategy = null;
-          setSide(state.side);
-        }
-      } else if (state.strategy) selectStrategy(state.strategy.id, { step: state.step });
+        state.strategy = null;
+        setSide(state.side);
+      } else if (state.strategy && library.has(state.strategy.id)) selectStrategy(state.strategy.id, { step: state.step });
       syncUrl();
       render({ from: null });
       window.scrollTo(0, 0);
       $('open-list').focus({ preventScroll: true });
-      if (savedId) protectLocal();
     },
   });
 }
@@ -641,151 +653,247 @@ async function shareLink(url, title) {
   if (navigator.share) {
     try {
       await navigator.share({ title, url });
-      return;
+      return true;
     } catch (err) {
-      if (err?.name === 'AbortError') return; // partage annulé par l'utilisateur
+      if (err?.name === 'AbortError') return false; // partage annulé par l'utilisateur
     }
   }
   toast((await copy(url)) ? 'Lien copié' : `Copie impossible, voici le lien : ${url}`);
+  return true;
 }
 
-const fileName = (s) => `${s.id}.json`;
-
+// Lien toujours court : la stratégie est dans le dépôt GitHub, le lien ne porte que son id,
+// l'étape, la vue et les pseudos.
 $('share').addEventListener('click', async () => {
   stopPlay();
   const s = state.strategy;
-  // Stratégie présente seulement sur ce téléphone : elle est jointe au lien.
-  if (s && library.isLocalCopy(s.id) && !shareData[s.id]) shareData[s.id] = await encodeStrategy(payloadOf(s));
-  const url = buildShareUrl(location.href, s?.id, urlState(), { data: s ? shareData[s.id] : undefined });
+  const url = buildShareUrl(location.href, s?.id, urlState());
   const who = state.view === TEAM ? 'vue équipe' : displayName(state.view, state.nicknames);
   const title = s ? `${s.title.text}, ${isRecap() ? 'récap' : `étape ${state.step}`} (${who})` : 'Stratbook';
-  if (s && url.length > LINK_MAX) {
-    const choice = await choiceDialog({
-      title: 'Lien trop long pour Discord',
-      text: [
-        `Ce lien fait ${nf(url.length)} caractères. Discord refuse les messages de plus de 2 000 caractères (sans Nitro).`,
-        'Il passe sur WhatsApp, Messages ou par e-mail. Pour Discord, envoie plutôt le fichier de la stratégie : ton ami l’ouvre avec « Importer un fichier » dans le menu Stratégies.',
-      ],
-      choices: [
-        { value: 'file', label: 'Envoyer le fichier', kind: 'primary' },
-        { value: 'link', label: 'Partager le lien quand même' },
-        { value: 'cancel', label: 'Annuler' },
-      ],
-    });
-    if (choice === 'cancel') return;
-    if (choice === 'file') {
-      const how = await saveFile(fileName(s), normalize(s), { share: touchDevice(), title: s.title.text });
-      if (how === 'downloaded') toast('Fichier téléchargé : envoie-le à ton ami');
-      return;
-    }
-  }
-  await shareLink(url, title);
+  const shared = await shareLink(url, title);
+  if (shared && s && library.origin(s.id) === 'local')
+    toast('Attention : cette stratégie n’est que sur ce téléphone. Publie-la (menu Stratégies) pour que le lien marche chez tes amis.');
 });
 
-// ---------- Stratégies reçues (lien ou fichier) ----------
-// Date d'une version ; avec les secondes si les deux versions datent de la même minute.
-const when = (s, other) => {
-  const t = stampOf(s);
-  if (!t) return 'date inconnue';
-  const seconds = Math.floor(t / 60000) === Math.floor(stampOf(other) / 60000) ? { second: '2-digit' } : {};
-  return new Date(t).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', ...seconds });
-};
+// ---------- Stratégies dans GitHub ----------
+const githubToken = () => vault.token() ?? undefined;
 
-/**
- * Une version différente existe déjà sur ce téléphone : l'utilisateur choisit.
- * Renvoie l'id de la stratégie à afficher et un message.
- */
-async function resolveConflict(received, { existing, newer }) {
-  const note = newer === 'received' ? ' (plus récente)' : newer === 'mine' ? ' (plus ancienne)' : '';
-  const mineNote = newer === 'mine' ? ' (plus récente)' : '';
-  const choice = await choiceDialog({
-    title: 'Tu as déjà cette stratégie',
-    text: [
-      `« ${existing.title.text} » existe déjà sur ce téléphone, avec un autre contenu.`,
-      `Ta version : ${when(existing, received)}${mineNote}. Version reçue : ${when(received, existing)}${note}.`,
-    ],
-    choices: [
-      { value: 'both', label: 'Garder les deux', kind: 'primary' },
-      { value: 'replace', label: 'Remplacer la mienne' },
-      { value: 'mine', label: 'Garder la mienne' },
-    ],
-    dismiss: 'mine', // fermer sans choisir ne fait rien perdre
-  });
-  if (choice === 'replace') {
-    library.save(received, { received: true });
-    return { id: received.id, message: 'Ta version a été remplacée' };
-  }
-  if (choice === 'both') {
-    const copy = copyOf(received);
-    library.save(copy, { received: true });
-    return { id: copy.id, message: `Version reçue gardée à part : « ${copy.title.text} »` };
-  }
-  return { id: existing.id, message: 'Ta version est gardée' };
-}
-
-/** Range une stratégie reçue dans la bibliothèque. Renvoie { id, message, added }. */
-async function receive(received) {
-  const res = incomingAction(library, received);
-  if (res.action === 'same') return { id: received.id, message: '', added: false };
-  if (res.action === 'add' || res.action === 'update') {
-    library.save(received, { received: true });
-    return { id: received.id, message: `Stratégie « ${received.title.text} » ${res.action === 'add' ? 'ajoutée' : 'mise à jour'}`, added: true };
-  }
-  return { ...(await resolveConflict(received, res)), added: true };
-}
-
-// ---------- Sauvegarde, import, installation ----------
-/** Stratégies perso sur le téléphone : on demande au navigateur de les garder, et on propose l'installation. */
-function protectLocal() {
-  if (!library.localList().length) return;
-  requestPersist();
-  if (shouldOfferInstall(storage)) offerInstall();
-}
-
-function offerInstall() {
-  showInstallDialog({ storage, hasLocal: library.localList().length > 0, onBackup: backupAll });
-}
-
-async function backupAll() {
-  const list = library.localList();
-  if (!list.length) return toast('Aucune stratégie perso à sauvegarder');
-  const date = new Date().toISOString().slice(0, 10);
-  const how = await saveFile(`stratbook-sauvegarde-${date}.json`, backupData(list), {
-    share: touchDevice(),
-    title: 'Sauvegarde Stratbook',
-  });
-  if (how === 'downloaded') toast(`${list.length} stratégie${list.length > 1 ? 's' : ''} sauvegardée${list.length > 1 ? 's' : ''} dans le fichier`);
-}
-
-async function importFile() {
-  const text = await pickFile();
-  if (text === null) return;
-  let list = [];
+/** Lit la version à jour du dépôt. Renvoie les ids changés (vide si GitHub est injoignable). */
+async function refreshFromGitHub() {
   try {
-    list = readImport(JSON.parse(text));
+    await builtInShas;
+    const token = githubToken();
+    const listing = await listStrategies(fetch, { token });
+    return await library.sync(listing, (id) => readStrategy(fetch, id, { token }));
   } catch {
-    list = [];
+    return new Set(); // hors ligne ou limite atteinte : la version livrée avec le site reste affichée
   }
-  if (!list.length) return toast('Fichier illisible : aucune stratégie trouvée');
-  let shown = null;
-  let added = 0;
-  let lastMessage = '';
-  for (const received of list) {
-    const r = await receive(received);
-    if (r.added) added++;
-    if (r.message) lastMessage = r.message;
-    shown = r.id;
-  }
-  if (shown && library.has(shown)) {
-    selectStrategy(shown);
+}
+
+/** Affiche les changements venus de GitHub (stratégie affichée modifiée ou supprimée, menu). */
+function applyRemoteChanges(changed) {
+  if (!changed.size || document.body.dataset.mode !== 'view') return;
+  const cur = state.strategy?.id;
+  const now = cur ? library.get(cur) : null;
+  if (cur && !now) {
+    state.strategy = null;
+    setSide(state.side);
+    toast('Cette stratégie a été supprimée');
+  } else if (cur && now !== state.strategy) {
+    selectStrategy(cur, { step: isRecap() ? RECAP : state.step });
     syncUrl();
     render({ from: null });
+    toast('Stratégie mise à jour');
+  } else if (!cur) setSide(state.side);
+  if (!$('strat-menu').hidden) renderMenu();
+}
+
+// De retour sur l'onglet (pause entre deux manches) : on revérifie, au plus une fois par minute.
+let lastRefresh = 0;
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || Date.now() - lastRefresh < 60000) return;
+  lastRefresh = Date.now();
+  applyRemoteChanges(await refreshFromGitHub());
+});
+
+/** Jeton refusé ou retiré : l'accès est verrouillé, à reconfigurer. */
+function githubFailed(err) {
+  if (err?.code === 'token') {
+    vault.lock();
+    toast(`${err.message} Reconfigure l’accès éditeur (menu Stratégies).`);
+  } else toast(err?.message ?? 'Erreur GitHub');
+}
+
+/**
+ * Publie une stratégie dans le dépôt (un commit). Renvoie true si c'est fait.
+ * Si le fichier a changé ailleurs entre-temps (autre appareil), on demande avant de le remplacer.
+ */
+async function publish(strategy) {
+  const token = vault.token();
+  if (!token) {
+    toast('Édition verrouillée : déverrouille-la depuis le menu Stratégies');
+    return false;
   }
-  toast(list.length === 1 ? lastMessage || 'Stratégie déjà à jour' : `${list.length} stratégies lues, ${added} ajoutée${added > 1 ? 's' : ''} ou mise${added > 1 ? 's' : ''} à jour`);
-  protectLocal();
+  const done = (sha) => {
+    library.published(strategy, sha);
+    toast('Publiée sur GitHub : tes amis la voient avec le lien (site mis à jour d’ici une minute)');
+    return true;
+  };
+  try {
+    return done(await writeStrategy(fetch, token, strategy, { sha: library.shaOf(strategy.id) ?? undefined }));
+  } catch (err) {
+    if (err.code !== 'conflict') {
+      githubFailed(err);
+      return false;
+    }
+  }
+  // Conflit : une autre version est dans le dépôt.
+  let latest = null;
+  try {
+    latest = await readStrategy(fetch, strategy.id, { token });
+  } catch {
+    latest = null;
+  }
+  const choice = await choiceDialog({
+    title: 'Modifiée ailleurs',
+    text: [
+      'Cette stratégie a changé sur GitHub depuis que tu l’as ouverte (sur un autre appareil ?).',
+      'Publier ta version remplace celle de GitHub.',
+    ],
+    choices: [
+      { value: 'mine', label: 'Publier ma version', kind: 'primary' },
+      { value: 'cancel', label: 'Revenir à l’éditeur' },
+    ],
+  });
+  if (choice !== 'mine') return false;
+  try {
+    return done(await writeStrategy(fetch, token, strategy, { sha: latest?.sha }));
+  } catch (err) {
+    githubFailed(err);
+    return false;
+  }
+}
+
+/** Supprime une stratégie du dépôt (ou une ancienne copie du téléphone). Renvoie true si c'est fait. */
+async function removeStrategy(strategy) {
+  if (library.origin(strategy.id) === 'local') {
+    library.removed(strategy.id);
+    toast('Stratégie effacée de ce téléphone');
+    return true;
+  }
+  const token = vault.token();
+  if (!token) {
+    toast('Édition verrouillée : déverrouille-la depuis le menu Stratégies');
+    return false;
+  }
+  const attempt = async (sha) => deleteStrategy(fetch, token, { id: strategy.id, title: strategy.title.text, sha });
+  try {
+    await attempt(library.shaOf(strategy.id));
+  } catch (err) {
+    if (err.code === 'missing') {
+      // Déjà supprimée ailleurs.
+    } else if (err.code === 'conflict') {
+      try {
+        await attempt((await readStrategy(fetch, strategy.id, { token })).sha);
+      } catch (again) {
+        githubFailed(again);
+        return false;
+      }
+    } else {
+      githubFailed(err);
+      return false;
+    }
+  }
+  library.removed(strategy.id);
+  toast('Stratégie supprimée du dépôt GitHub');
+  return true;
+}
+
+/** Publie les anciennes stratégies gardées seulement sur ce téléphone. */
+async function publishPending() {
+  if (!(await requireAdmin())) return;
+  const list = library.pendingLocal();
+  let ok = 0;
+  for (const s of list) if (await publish(s)) ok++;
+  toast(`${ok} stratégie${ok > 1 ? 's' : ''} publiée${ok > 1 ? 's' : ''} sur ${list.length}`);
+  if (state.strategy) selectStrategy(state.strategy.id, { step: isRecap() ? RECAP : state.step });
+  syncUrl();
+  render({ from: null });
+}
+
+// ---------- Accès éditeur (mot de passe) ----------
+/**
+ * Demande l'accès éditeur si besoin. Premier passage sur un appareil : jeton GitHub + mot de passe ;
+ * ensuite : mot de passe seul. Renvoie true si l'édition est déverrouillée.
+ */
+function requireAdmin() {
+  if (vault.isUnlocked()) return Promise.resolve(true);
+  const dialog = $('admin-dialog');
+  const setup = !vault.isSetUp();
+  $('admin-title').textContent = setup ? 'Configurer l’accès éditeur' : 'Accès éditeur';
+  $('admin-hint').textContent = setup
+    ? 'Une seule fois par appareil : colle ton jeton GitHub et choisis un mot de passe. Le jeton reste chiffré sur cet appareil.'
+    : 'Mot de passe pour créer, modifier ou supprimer des stratégies.';
+  $('admin-token-field').hidden = !setup;
+  $('admin-confirm-field').hidden = !setup;
+  $('admin-help').hidden = !setup;
+  $('admin-forget').hidden = setup;
+  $('admin-password').autocomplete = setup ? 'new-password' : 'current-password';
+  $('admin-submit').textContent = setup ? 'Activer' : 'Déverrouiller';
+  $('admin-error').textContent = '';
+  $('admin-form').reset();
+  dialog.showModal();
+  (setup ? $('admin-token') : $('admin-password')).focus();
+  return new Promise((resolve) => {
+    const finish = (ok) => {
+      $('admin-form').onsubmit = null;
+      dialog.onclose = null;
+      if (dialog.open) dialog.close();
+      resolve(ok);
+    };
+    dialog.onclose = () => finish(false);
+    $('admin-cancel').onclick = () => finish(false);
+    $('admin-forget').onclick = () => {
+      vault.forget();
+      finish(false);
+      toast('Accès éditeur oublié sur cet appareil');
+    };
+    $('admin-form').onsubmit = async (e) => {
+      e.preventDefault();
+      const error = (text) => ($('admin-error').textContent = text);
+      const password = $('admin-password').value;
+      const submit = $('admin-submit');
+      submit.disabled = true;
+      try {
+        if (setup) {
+          const token = $('admin-token').value.trim();
+          if (!token) return error('Colle ton jeton GitHub.');
+          if (password.length < 8) return error('Mot de passe : 8 caractères au moins.');
+          if (password !== $('admin-confirm').value) return error('Les deux mots de passe sont différents.');
+          try {
+            await checkAccess(fetch, token);
+          } catch (err) {
+            return error(err.message);
+          }
+          await vault.setUp(token, password);
+          requestPersist();
+          toast('Accès éditeur activé sur cet appareil');
+        } else {
+          if (!(await vault.unlock(password))) return error('Mot de passe incorrect.');
+          toast('Édition déverrouillée');
+        }
+        finish(true);
+      } finally {
+        submit.disabled = false;
+      }
+    };
+  });
 }
 
 // ---------- Ouverture ----------
+// Un lien vers une stratégie publiée après la mise en ligne du site : on attend GitHub (5 s au plus).
+const within = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+
 async function init() {
   const params = parseParams(location.search);
   const initial = resolveInitial(params, store.read());
@@ -795,25 +903,12 @@ async function init() {
 
   let id = params.strategyId;
   let message = '';
-  let received = null;
-  let baseChanged = false;
-  // Lien avec une stratégie jointe : complète, ou différences avec l'original du dépôt.
-  if (params.data) {
-    const got = expandPayload(await decodeStrategy(params.data), (x) => library.builtIn(x));
-    if (got) ({ strategy: received, baseChanged } = got);
-    else message = 'Stratégie du lien illisible';
-  } else if (id && !library.has(id)) {
-    // Adresse copiée à la main : une stratégie perso n'y est pas jointe.
-    message = 'Stratégie introuvable sur ce téléphone. Demande le lien du bouton Partager : il contient la stratégie.';
+  let refreshed = null;
+  if (id && !library.has(id)) {
+    refreshed = refreshFromGitHub();
+    await within(refreshed, 5000);
+    if (!library.has(id)) message = 'Stratégie introuvable : elle a peut-être été supprimée, ou GitHub ne répond pas.';
   }
-  // Version déjà présente et différente : on affiche d'abord la sienne, puis on demande.
-  const conflict = received ? incomingAction(library, received) : null;
-  if (received && conflict.action !== 'conflict') {
-    const r = await receive(received);
-    message = r.message;
-    id = r.id;
-  } else if (received) id = received.id;
-
   if (!library.has(id)) id = null;
   if (!id && params.side) id = library.list({ map: MAP_ID, side: params.side })[0]?.id ?? null;
   if (!id && !params.side) id = [library.lastId(), DEFAULT_STRATEGY_ID].find((x) => x && library.has(x)) ?? null;
@@ -822,18 +917,11 @@ async function init() {
   else state.side = params.side ?? 't';
   syncUrl();
   render({ from: null });
-
-  if (conflict?.action === 'conflict') {
-    const r = await resolveConflict(received, conflict);
-    selectStrategy(r.id, { step: isRecap() ? RECAP : state.step }); // la version choisie (ou la copie)
-    syncUrl();
-    render({ from: null });
-    message = r.message;
-  }
-  if (baseChanged) message = `${message ? `${message}. ` : ''}L’original a changé depuis l’envoi du lien : vérifie la stratégie.`;
   if (message) toast(message);
-  if (received) protectLocal();
-  else if (library.localList().length) requestPersist();
+
+  // Version à jour du dépôt (nouvelles stratégies, modifications, suppressions depuis la mise en ligne).
+  lastRefresh = Date.now();
+  applyRemoteChanges(await (refreshed ?? refreshFromGitHub()));
 }
 
 init();

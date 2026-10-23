@@ -55,45 +55,6 @@ export async function confirmDialog({ title, text, ok = 'Confirmer', cancel = 'A
   return answer === 'ok';
 }
 
-/** Télécharge un fichier (ou l'envoie par le menu de partage du téléphone si `share` et possible). */
-export async function saveFile(name, data, { share = false, title = name } = {}) {
-  const text = typeof data === 'string' ? data : `${JSON.stringify(data, null, 2)}\n`;
-  const type = 'application/json';
-  if (share && typeof File === 'function' && navigator.canShare) {
-    const file = new File([text], name, { type });
-    if (navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title });
-        return 'shared';
-      } catch (err) {
-        if (err?.name === 'AbortError') return 'cancelled';
-      }
-    }
-  }
-  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([text], { type })), download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  return 'downloaded';
-}
-
-/** Demande un fichier à l'utilisateur et renvoie son texte (null si annulé). */
-export function pickFile(accept = '.json,application/json') {
-  return new Promise((resolve) => {
-    const input = Object.assign(document.createElement('input'), { type: 'file', accept });
-    input.style.display = 'none';
-    document.body.append(input);
-    input.addEventListener('change', async () => {
-      const file = input.files?.[0];
-      input.remove();
-      resolve(file && file.size < 2_000_000 ? await file.text() : null);
-    });
-    input.addEventListener('cancel', () => (input.remove(), resolve(null)));
-    input.click();
-  });
-}
-
 /** Coordonnées d'un pointeur dans le repère d'un SVG (viewBox), zoom compris. */
 export function svgPoint(svg, clientX, clientY) {
   const p = new DOMPoint(clientX, clientY).matrixTransform(svg.getScreenCTM().inverse());

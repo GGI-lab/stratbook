@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, asAdmin } from './helpers.js';
 
 const views = (page) => page.getByRole('navigation', { name: 'Choix de la vue' });
 const steps = (page) => page.getByRole('navigation', { name: 'Étapes de la stratégie' });
@@ -65,8 +65,8 @@ test('récap équipe : toute la stratégie, puis un joueur ouvre sa vue', async 
     await expect(brief(page)).toContainText(t);
   await expect(brief(page)).toContainText('« Long go »');
   await expect(brief(page)).toContainText('Smoke Xbox');
-  // Tous les trajets sont tracés sur la carte.
-  expect(await page.locator('#map .move').count()).toBeGreaterThan(5);
+  // Tous les trajets sont tracés sur la carte : un tracé d'un seul tenant par joueur.
+  expect(await page.locator('#map .move').count()).toBe(5);
   await brief(page).locator('[data-goto-view="j2"]').click();
   await expect(views(page).getByRole('button', { name: 'J2' })).toHaveAttribute('aria-pressed', 'true');
   await expect(brief(page)).toContainText('Tes missions');

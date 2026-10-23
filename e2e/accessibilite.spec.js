@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, asAdmin } from './helpers.js';
 import AxeBuilder from '@axe-core/playwright';
 
 // Scan automatique WCAG 2.1 AA (environ 30 % des problèmes possibles, à compléter par des tests manuels).
@@ -40,7 +40,8 @@ test('zones tactiles de 44 px minimum', async ({ page }) => {
   expect(small).toEqual([]);
 });
 
-test('axe : menu des stratégies ouvert et éditeur', async ({ page }) => {
+test('axe : menu des stratégies ouvert et éditeur', async ({ page, context }) => {
+  await asAdmin(context);
   await page.goto('./');
   await page.getByRole('button', { name: 'Stratégies' }).click();
   let { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();

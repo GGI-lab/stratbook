@@ -1,11 +1,10 @@
-import { test, expect } from '@playwright/test';
-import { dragToken, dragVia, tapMap, skipInstallPrompt } from './helpers.js';
+import { test, expect, asAdmin, dragToken, dragVia, tapMap, shareLink } from './helpers.js';
 
 const header = (page) => page.locator('header.top');
 const brief = (page) => page.locator('#consignes');
 
 test.beforeEach(async ({ context }) => {
-  await skipInstallPrompt(context);
+  await asAdmin(context);
 });
 
 test('en-tête : boutons Stratégies, side, Pseudos, Partager, de même taille et dans cet ordre', async ({ page }) => {
@@ -42,7 +41,7 @@ test('menu des stratégies : liste du side, Échap ferme et rend le focus', asyn
   await expect(open).toBeFocused();
 });
 
-test('créer une stratégie CT, placer les joueurs, enregistrer, la lire et la partager', async ({ page, browser }) => {
+test('créer une stratégie CT, placer les joueurs, la publier dans GitHub, la lire et la partager', async ({ page, browser, github }) => {
   await page.goto('./?side=ct');
   await page.getByRole('button', { name: 'Créer une stratégie CT' }).click();
   await expect(page.locator('#editor-title')).toHaveText('Nouvelle stratégie CT');
@@ -73,33 +72,31 @@ test('créer une stratégie CT, placer les joueurs, enregistrer, la lire et la p
   await expect(brief(page)).toContainText('J1 tient B');
   await page.getByRole('button', { name: 'Stratégies' }).click();
   await expect(page.locator('#menu-list')).toContainText('Retake B');
-  await expect(page.locator('#menu-list')).toContainText('Perso');
   await page.keyboard.press('Escape');
 
-  // Partage : la stratégie voyage dans le lien.
-  await page.evaluate(() => {
-    delete Navigator.prototype.share;
-    window.__copied = null;
-    navigator.clipboard.writeText = async (t) => {
-      window.__copied = t;
-    };
-  });
-  await page.getByRole('button', { name: 'Partager' }).click();
-  await expect(page.getByRole('status')).toHaveText('Lien copié');
-  const link = await page.evaluate(() => window.__copied);
-  expect(link).toMatch(/[?&]d=[zj]/);
+  // Publiée dans GitHub : un commit, le fichier contient la stratégie.
+  expect(github.commits).toHaveLength(1);
+  expect(github.commits[0].message).toContain('« Retake B » ajoutée');
+  const id = github.commits[0].id;
+  expect(github.strategy(id).steps).toHaveLength(2);
 
+  // Partage : lien court, seulement l'id, l'étape, la vue.
+  const link = await shareLink(page);
+  expect(link).not.toContain('d=');
+  expect(new URL(link).searchParams.get('s')).toBe(id);
+  expect(link.length).toBeLessThan(120);
+
+  // L'ami l'ouvre avant la mise à jour du site : lue directement dans GitHub.
   const ctx = await browser.newContext();
+  await github.attach(ctx);
   const friend = await ctx.newPage();
   await friend.goto(link);
   await expect(friend.locator('#strat-title')).toHaveText('Retake B');
-  await expect(friend.getByRole('status')).toHaveText('Stratégie « Retake B » ajoutée');
-  await friend.reload();
-  await expect(friend.locator('#strat-title')).toHaveText('Retake B');
+  await expect(friend.locator('#consignes')).toContainText('Étape 1 sur 2');
   await ctx.close();
 });
 
-test("modifier la stratégie d'origine, puis revenir à la version d'origine", async ({ page }) => {
+test('modifier Split A : publiée dans GitHub (remplace le fichier), puis supprimée pour tout le monde', async ({ page, github }) => {
   await page.goto('./?step=2&role=j2');
   await page.getByRole('button', { name: 'Stratégies' }).click();
   await page.getByRole('button', { name: 'Modifier cette stratégie' }).click();
@@ -107,13 +104,25 @@ test("modifier la stratégie d'origine, puis revenir à la version d'origine", a
   await page.locator('#ed-m-j2').fill('Smoke CT puis attends le go');
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(brief(page)).toContainText('Smoke CT puis attends le go');
+  await expect(page.getByRole('status')).toContainText('Publiée sur GitHub');
+  expect(github.commits.map((c) => [c.method, c.id])).toEqual([['PUT', 'd2-split-a']]);
+  expect(github.strategy('d2-split-a').steps[1].roles.j2[0].text).toBe('Smoke CT puis attends le go');
+  expect(github.strategy('d2-split-a').updatedAt).toBeGreaterThan(0);
+  // Rechargée : la version GitHub est affichée (sans attendre la mise à jour du site).
+  await page.reload();
+  await expect(brief(page)).toContainText('Smoke CT puis attends le go');
+
+  // Suppression : un commit, plus de stratégie Terro.
   await page.getByRole('button', { name: 'Stratégies' }).click();
-  await expect(page.locator('#menu-list')).toContainText('Modifiée');
   await page.getByRole('button', { name: 'Modifier cette stratégie' }).click();
-  await page.getByRole('button', { name: 'Revenir à la version d’origine' }).click();
-  await page.getByRole('button', { name: 'Revenir', exact: true }).click();
-  await expect(brief(page)).toContainText('Étape 2 sur 4');
-  await expect(brief(page).locator('.missions')).toHaveText('Smoke CT.');
+  await page.getByRole('button', { name: 'Supprimer la stratégie' }).click();
+  await expect(page.getByRole('dialog')).toContainText('supprimée du dépôt GitHub, pour tout le monde');
+  await page.getByRole('button', { name: 'Supprimer', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Créer une stratégie T' })).toBeVisible();
+  expect(github.commits.at(-1).method).toBe('DELETE');
+  expect(github.strategy('d2-split-a')).toBeNull();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Créer une stratégie T' })).toBeVisible();
 });
 
 test('annuler une création modifiée demande confirmation', async ({ page }) => {
@@ -136,7 +145,6 @@ test('éditeur : aucun défilement horizontal', async ({ page }) => {
 });
 
 // ---------- Défaire / Refaire ----------
-const savedStrategies = (page) => page.evaluate(() => JSON.parse(localStorage.getItem('stratbook:strategies') ?? '{}'));
 
 test('défaire et refaire : déplacement de joueur, utilitaire, texte', async ({ page }) => {
   await page.goto('./?side=ct');
@@ -185,7 +193,7 @@ test('défaire au clavier (Ctrl+Z) hors des champs de texte', async ({ page }, t
 });
 
 // ---------- Point de passage ----------
-test('point de passage : imposer Mid plutôt que le plus court chemin, puis le retirer', async ({ page }) => {
+test('point de passage : imposer Mid plutôt que le plus court chemin, puis le retirer', async ({ page, github }) => {
   await page.goto('./');
   await page.getByRole('button', { name: 'Stratégies' }).click();
   await page.getByRole('button', { name: 'Nouvelle stratégie T' }).click();
@@ -202,7 +210,8 @@ test('point de passage : imposer Mid plutôt que le plus court chemin, puis le r
   const after = await page.locator('#ed-map .move[data-role="j1"] path').first().getAttribute('d');
   expect(after).not.toBe(before);
   await page.getByRole('button', { name: 'Enregistrer' }).click();
-  const saved = Object.values(await savedStrategies(page)).find((s) => s.title.text === 'Passage Mid');
+  const saved = github.strategy(github.commits.at(-1).id);
+  expect(saved.title.text).toBe('Passage Mid');
   const move = saved.steps[0].map.moves.find((m) => m.role === 'j1');
   expect(move.via).toHaveLength(1);
   const [vx, vy] = move.via[0];
