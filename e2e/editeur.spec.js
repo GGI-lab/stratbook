@@ -210,6 +210,8 @@ test('point de passage : imposer Mid plutôt que le plus court chemin, puis le r
   const after = await page.locator('#ed-map .move[data-role="j1"] path').first().getAttribute('d');
   expect(after).not.toBe(before);
   await page.getByRole('button', { name: 'Enregistrer' }).click();
+  // Publication terminée (éditeur fermé) avant de lire le dépôt.
+  await expect(page.locator('#strat-title')).toHaveText('Passage Mid');
   const saved = github.strategy(github.commits.at(-1).id);
   expect(saved.title.text).toBe('Passage Mid');
   const move = saved.steps[0].map.moves.find((m) => m.role === 'j1');
