@@ -21,7 +21,7 @@ import {
 } from '../src/editor/ops.js';
 import { createHistory } from '../src/editor/history.js';
 
-const splitA = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
+const splitA = JSON.parse(readFileSync(new URL('./fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8'));
 const ROLES = ['j1', 'j2', 'j3', 'j4', 'j5'];
 const dist = ([ax, ay], [bx, by]) => Math.hypot(ax - bx, ay - by);
 

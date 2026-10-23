@@ -26,6 +26,6 @@ Chaque envoi sur `main` publie le site via GitHub Actions, y compris les commits
 - `src/editor/` : éditeur (écran dans `editor.js`, opérations testées dans `ops.js`, historique Défaire / Refaire dans `history.js`).
 - `src/map/` : cartes (image, cadrage, zones, grille de navigation), calcul des trajets (`nav.js`), rendu SVG et animation entre étapes.
 - `src/` : interface (JavaScript sans framework).
-- `tests/` : tests automatiques.
+- `tests/` : tests automatiques. Les tests de contenu (fidélité au PDF, positions) et les tests de parcours utilisent une copie figée de Split A (`tests/fixtures/`) : les modifications faites depuis l'application ne les font pas échouer.
 
 Le contenu tactique vient uniquement du PDF de Greg. Chaque texte des données porte un tag `source` (`pdf` ou `ajout`).

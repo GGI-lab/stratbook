@@ -7,7 +7,8 @@ import { createHash } from 'node:crypto';
 export { expect };
 export const TOKEN = 'github_pat_test';
 
-const DIR = new URL('../strategies/', import.meta.url);
+// Données figées (tests/fixtures) : le site des tests de parcours est construit avec elles (vite build --mode e2e).
+const DIR = new URL('../tests/fixtures/strategies/', import.meta.url);
 const gitSha = (text) => {
   const body = Buffer.from(text, 'utf8');
   return createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${body.length}\0`), body])).digest('hex');
@@ -99,7 +100,7 @@ export async function asAdmin(context) {
   }, TOKEN);
 }
 
-export const SPLIT_A = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
+export const SPLIT_A = JSON.parse(readFileSync(new URL('../tests/fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8'));
 
 /** Coordonnées écran d'un point de la carte (pixels de l'image) dans le SVG `selector`. */
 export async function toScreen(page, selector, point) {

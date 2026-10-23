@@ -160,3 +160,23 @@ test('lien lisible : ouvert directement, rechargé, et anciens liens réécrits'
   expect(page404.status()).toBe(200);
   expect(await page404.text()).toBe(await (await request.get(baseURL)).text());
 });
+
+test('bouton Équipe sélectionné : contour intérieur blanc comme les joueurs, sans fond blanc', async ({ page }) => {
+  await page.goto('./?step=1&role=equipe');
+  const team = views(page).getByRole('button', { name: 'Équipe' });
+  await expect(team).toHaveAttribute('aria-pressed', 'true');
+  const style = (loc) => loc.evaluate((e) => {
+    const c = getComputedStyle(e);
+    return { bg: c.backgroundColor, border: c.borderTopColor, shadow: c.boxShadow };
+  });
+  const t = await style(team);
+  expect(t.bg).toBe('rgb(30, 42, 54)'); // même fond que J1 sélectionné (--surface-2)
+  expect(t.border).toBe('rgb(232, 238, 244)'); // blanc (--text)
+  expect(t.shadow).toContain('rgb(232, 238, 244)');
+  expect(t.shadow).toContain('inset');
+  // Même construction que J1 sélectionné, seule la couleur change.
+  await views(page).getByRole('button', { name: 'J1' }).click();
+  const j1 = await style(views(page).getByRole('button', { name: 'J1' }));
+  expect(j1.bg).toBe(t.bg);
+  expect(j1.shadow.replace(/rgb\([^)]*\)/, 'C')).toBe(t.shadow.replace(/rgb\([^)]*\)/, 'C'));
+});

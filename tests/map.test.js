@@ -5,7 +5,7 @@ import { strokesOf, renderStepSvg } from '../src/map/render.js';
 import { ZONES, VIEWBOX } from '../src/map/dust2.js';
 import { positionAt } from '../src/map/routes.js';
 
-const data = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
+const data = JSON.parse(readFileSync(new URL('./fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8'));
 const ROLES = ['j1', 'j2', 'j3', 'j4', 'j5'];
 
 test('les 13 zones demandées existent sur le plan', () => {

@@ -16,7 +16,7 @@ import {
   GitHubError,
 } from '../src/github.js';
 
-const splitAText = readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8');
+const splitAText = readFileSync(new URL('./fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8');
 const splitA = JSON.parse(splitAText);
 
 /** Faux fetch : enregistre les appels et répond selon `handler`. */
@@ -32,7 +32,7 @@ function fakeFetch(handler) {
 }
 
 test('empreinte Git : identique à `git hash-object`', async () => {
-  const path = new URL('../strategies/d2-split-a.json', import.meta.url).pathname;
+  const path = new URL('./fixtures/strategies/d2-split-a.json', import.meta.url).pathname;
   const expected = execFileSync('git', ['hash-object', path], { encoding: 'utf8' }).trim();
   assert.equal(await blobSha(splitAText), expected);
   assert.equal(await blobSha(''), 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391'); // fichier vide, valeur connue de Git

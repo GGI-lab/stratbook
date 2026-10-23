@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const data = JSON.parse(
-  readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('./fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8'),
 );
 const ROLES = ['j1', 'j2', 'j3', 'j4', 'j5'];
 const SOURCES = new Set(['pdf', 'ajout']);

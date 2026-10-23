@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createStrategy } from '../src/model.js';
 import { createLibrary } from '../src/library.js';
 
-const splitA = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
+const splitA = JSON.parse(readFileSync(new URL('./fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8'));
 const builtIns = { [splitA.id]: splitA };
 const shas = { [splitA.id]: 'sha-site' };
 

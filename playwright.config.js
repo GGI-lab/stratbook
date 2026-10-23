@@ -21,7 +21,8 @@ export default defineConfig({
     locale: 'fr-FR',
   },
   webServer: {
-    command: 'npm run build && npx vite preview --port 4173 --strictPort',
+    // Site construit avec les stratégies figées de tests/fixtures (voir vite.config.js, mode e2e).
+    command: 'npx vite build --mode e2e && npx vite preview --mode e2e --outDir dist-e2e --port 4173 --strictPort',
     url: 'http://localhost:4173/stratbook/',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

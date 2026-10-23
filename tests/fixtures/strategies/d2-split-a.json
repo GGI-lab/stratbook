@@ -1,0 +1,970 @@
+{
+  "id": "d2-split-a",
+  "map": "dust2",
+  "frame": {
+    "x": 360,
+    "y": 20,
+    "width": 590,
+    "height": 940
+  },
+  "side": {
+    "text": "Terro",
+    "source": "pdf"
+  },
+  "title": {
+    "text": "Split A, 3 Long + 2 Short",
+    "source": "pdf"
+  },
+  "sourceDocument": "D2 Terro - Split A - 3 Long + 2 Short.pdf",
+  "groups": [
+    {
+      "id": "long",
+      "label": {
+        "text": "Long",
+        "source": "pdf"
+      },
+      "players": [
+        "j1",
+        "j2",
+        "j3"
+      ]
+    },
+    {
+      "id": "short",
+      "label": {
+        "text": "Short",
+        "source": "pdf"
+      },
+      "players": [
+        "j4",
+        "j5"
+      ]
+    }
+  ],
+  "roles": {
+    "j1": {
+      "number": 1,
+      "group": "long",
+      "title": {
+        "text": "Long, ouvreur",
+        "source": "pdf"
+      },
+      "summary": {
+        "text": "Premier contact Long. Nettoie le trajet vers A : Long, Pit, Car, Rampe, site.",
+        "source": "pdf"
+      },
+      "utilities": []
+    },
+    "j2": {
+      "number": 2,
+      "group": "long",
+      "title": {
+        "text": "Long, support et trade J1, bombe",
+        "source": "pdf"
+      },
+      "summary": {
+        "text": "Toujours derrière, prêt pour le trade de J1. Plante la bombe.",
+        "source": "pdf"
+      },
+      "utilities": [
+        {
+          "text": "Smoke CT",
+          "source": "pdf"
+        },
+        {
+          "text": "Molotov Car",
+          "source": "pdf"
+        },
+        {
+          "text": "Flash de support si J1 la demande",
+          "source": "pdf"
+        }
+      ]
+    },
+    "j3": {
+      "number": 3,
+      "group": "long",
+      "title": {
+        "text": "Long, close",
+        "source": "pdf"
+      },
+      "summary": {
+        "text": "Aide J1 et J2, puis reste Long pour sécuriser contre la rotation.",
+        "source": "pdf"
+      },
+      "utilities": [
+        {
+          "text": "Flash Long pour J1",
+          "source": "pdf"
+        },
+        {
+          "text": "Smoke portes Long après la pose",
+          "source": "pdf"
+        }
+      ]
+    },
+    "j4": {
+      "number": 4,
+      "group": "short",
+      "title": {
+        "text": "Short, ouvreur",
+        "source": "pdf"
+      },
+      "summary": {
+        "text": "Premier contact Short. Nettoie le trajet vers A : Mid, Short.",
+        "source": "pdf"
+      },
+      "utilities": [
+        {
+          "text": "Resmoke CT si besoin",
+          "source": "pdf"
+        },
+        {
+          "text": "Flash CT",
+          "source": "pdf"
+        }
+      ]
+    },
+    "j5": {
+      "number": 5,
+      "group": "short",
+      "title": {
+        "text": "Short, sniper",
+        "source": "pdf"
+      },
+      "summary": {
+        "text": "Prend l'info Mid : joueurs vers B et push Mid.",
+        "source": "pdf"
+      },
+      "utilities": [
+        {
+          "text": "Molotov Lower",
+          "source": "pdf"
+        },
+        {
+          "text": "Smoke Xbox",
+          "source": "pdf"
+        },
+        {
+          "text": "Flash Short pour J4",
+          "source": "pdf"
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "n": 1,
+      "title": {
+        "text": "Prendre Long et Mid",
+        "source": "ajout"
+      },
+      "team": [
+        {
+          "group": "long",
+          "text": "J1, J2 et J3 sécurisent Long jusqu'à Car et contrôle site A.",
+          "source": "pdf"
+        },
+        {
+          "group": "short",
+          "text": "J5 peek Mid depuis Suicide, J4 contrôle Top Mid.",
+          "source": "pdf"
+        }
+      ],
+      "calls": [
+        {
+          "group": "long",
+          "text": "Long go",
+          "source": "pdf"
+        },
+        {
+          "group": "short",
+          "text": "Mid clear",
+          "source": "pdf"
+        }
+      ],
+      "roles": {
+        "j1": [
+          {
+            "text": "Sécurise Long jusqu'à Car et contrôle site A, avec J2 et J3.",
+            "source": "pdf"
+          }
+        ],
+        "j2": [
+          {
+            "text": "Sécurise Long jusqu'à Car et contrôle site A, avec J1 et J3.",
+            "source": "pdf"
+          }
+        ],
+        "j3": [
+          {
+            "text": "Sécurise Long jusqu'à Car et contrôle site A, avec J1 et J2.",
+            "source": "pdf"
+          }
+        ],
+        "j4": [
+          {
+            "text": "Contrôle Top Mid.",
+            "source": "pdf"
+          }
+        ],
+        "j5": [
+          {
+            "text": "Peek Mid depuis Suicide.",
+            "source": "pdf"
+          }
+        ]
+      },
+      "map": {
+        "positions": {
+          "j1": [
+            895,
+            300
+          ],
+          "j2": [
+            872,
+            350
+          ],
+          "j3": [
+            862,
+            405
+          ],
+          "j4": [
+            495,
+            600
+          ],
+          "j5": [
+            452,
+            690
+          ]
+        },
+        "moves": [
+          {
+            "role": "j1",
+            "path": [
+              [
+                470,
+                885
+              ],
+              [
+                612,
+                870
+              ],
+              [
+                630,
+                770
+              ],
+              [
+                690,
+                700
+              ],
+              [
+                706,
+                640
+              ],
+              [
+                790,
+                600
+              ],
+              [
+                895,
+                560
+              ],
+              [
+                895,
+                330
+              ]
+            ]
+          },
+          {
+            "role": "j2",
+            "path": [
+              [
+                455,
+                900
+              ],
+              [
+                600,
+                890
+              ],
+              [
+                618,
+                775
+              ],
+              [
+                675,
+                705
+              ],
+              [
+                694,
+                640
+              ],
+              [
+                780,
+                615
+              ],
+              [
+                874,
+                575
+              ],
+              [
+                872,
+                380
+              ]
+            ]
+          },
+          {
+            "role": "j3",
+            "path": [
+              [
+                440,
+                915
+              ],
+              [
+                588,
+                908
+              ],
+              [
+                604,
+                780
+              ],
+              [
+                660,
+                712
+              ],
+              [
+                682,
+                640
+              ],
+              [
+                770,
+                630
+              ],
+              [
+                860,
+                590
+              ],
+              [
+                862,
+                435
+              ]
+            ]
+          },
+          {
+            "role": "j4",
+            "path": [
+              [
+                425,
+                880
+              ],
+              [
+                455,
+                780
+              ],
+              [
+                470,
+                700
+              ],
+              [
+                488,
+                628
+              ]
+            ]
+          },
+          {
+            "role": "j5",
+            "path": [
+              [
+                405,
+                880
+              ],
+              [
+                440,
+                780
+              ],
+              [
+                450,
+                720
+              ]
+            ]
+          }
+        ],
+        "utilities": [],
+        "look": {
+          "j1": [
+            900,
+            200
+          ],
+          "j2": [
+            872,
+            200
+          ],
+          "j3": [
+            862,
+            250
+          ],
+          "j4": [
+            465,
+            340
+          ],
+          "j5": [
+            462,
+            330
+          ]
+        }
+      }
+    },
+    {
+      "n": 2,
+      "title": {
+        "text": "Préparer la convergence",
+        "source": "ajout"
+      },
+      "team": [
+        {
+          "group": "long",
+          "text": "J2 smoke CT, J1 prêt à avancer Rampe, J3 sécurise derrière.",
+          "source": "pdf"
+        },
+        {
+          "group": "short",
+          "text": "J4 avance Short sur la flash de J5, qui le suit.",
+          "source": "pdf"
+        }
+      ],
+      "calls": [
+        {
+          "group": "long",
+          "text": "CT smoké",
+          "source": "pdf"
+        },
+        {
+          "group": "short",
+          "text": "Short prise",
+          "source": "pdf"
+        }
+      ],
+      "roles": {
+        "j1": [
+          {
+            "text": "Prêt à avancer Rampe.",
+            "source": "pdf"
+          }
+        ],
+        "j2": [
+          {
+            "text": "Smoke CT.",
+            "source": "pdf"
+          }
+        ],
+        "j3": [
+          {
+            "text": "Sécurise derrière.",
+            "source": "pdf"
+          }
+        ],
+        "j4": [
+          {
+            "text": "Avance Short sur la flash de J5.",
+            "source": "pdf"
+          }
+        ],
+        "j5": [
+          {
+            "text": "Flash pour J4, puis le suit dans Short.",
+            "source": "pdf"
+          }
+        ]
+      },
+      "map": {
+        "positions": {
+          "j1": [
+            905,
+            290
+          ],
+          "j2": [
+            875,
+            345
+          ],
+          "j3": [
+            862,
+            470
+          ],
+          "j4": [
+            632,
+            330
+          ],
+          "j5": [
+            512,
+            398
+          ]
+        },
+        "moves": [
+          {
+            "role": "j4",
+            "path": [
+              [
+                495,
+                600
+              ],
+              [
+                470,
+                520
+              ],
+              [
+                470,
+                440
+              ],
+              [
+                520,
+                395
+              ],
+              [
+                600,
+                392
+              ],
+              [
+                628,
+                358
+              ]
+            ]
+          },
+          {
+            "role": "j5",
+            "path": [
+              [
+                452,
+                690
+              ],
+              [
+                462,
+                560
+              ],
+              [
+                462,
+                450
+              ],
+              [
+                490,
+                410
+              ]
+            ]
+          }
+        ],
+        "utilities": [
+          {
+            "type": "smoke",
+            "by": "j2",
+            "zone": "ct"
+          },
+          {
+            "type": "flash",
+            "by": "j5",
+            "zone": "short",
+            "dy": -20
+          }
+        ],
+        "look": {
+          "j1": [
+            820,
+            195
+          ],
+          "j2": [
+            760,
+            215
+          ],
+          "j3": [
+            800,
+            640
+          ],
+          "j4": [
+            720,
+            170
+          ],
+          "j5": [
+            630,
+            270
+          ]
+        }
+      }
+    },
+    {
+      "n": 3,
+      "title": {
+        "text": "Entrer sur A et planter",
+        "source": "ajout"
+      },
+      "team": [
+        {
+          "group": "all",
+          "text": "Flash Long et flash Short pour la prise du A. J2 plante.",
+          "source": "pdf"
+        },
+        {
+          "group": "short",
+          "text": "J4 et J5 reprennent le CT depuis Short et gardent l'arrière de Short.",
+          "source": "pdf"
+        }
+      ],
+      "calls": [
+        {
+          "group": "all",
+          "text": "Go site",
+          "source": "pdf"
+        }
+      ],
+      "roles": {
+        "j1": [],
+        "j2": [
+          {
+            "text": "Plante la bombe.",
+            "source": "pdf"
+          }
+        ],
+        "j3": [
+          {
+            "text": "Flash Long pour J1.",
+            "source": "ajout"
+          }
+        ],
+        "j4": [
+          {
+            "text": "Avec J5 : reprend le CT depuis Short et garde l'arrière de Short.",
+            "source": "pdf"
+          }
+        ],
+        "j5": [
+          {
+            "text": "Flash Short pour J4.",
+            "source": "ajout"
+          },
+          {
+            "text": "Avec J4 : reprend le CT depuis Short et garde l'arrière de Short.",
+            "source": "pdf"
+          }
+        ]
+      },
+      "map": {
+        "positions": {
+          "j1": [
+            745,
+            165
+          ],
+          "j2": [
+            805,
+            148
+          ],
+          "j3": [
+            862,
+            470
+          ],
+          "j4": [
+            662,
+            205
+          ],
+          "j5": [
+            625,
+            350
+          ]
+        },
+        "moves": [
+          {
+            "role": "j1",
+            "path": [
+              [
+                905,
+                290
+              ],
+              [
+                880,
+                215
+              ],
+              [
+                800,
+                185
+              ],
+              [
+                773,
+                170
+              ]
+            ]
+          },
+          {
+            "role": "j2",
+            "path": [
+              [
+                875,
+                345
+              ],
+              [
+                878,
+                240
+              ],
+              [
+                840,
+                180
+              ],
+              [
+                822,
+                158
+              ]
+            ]
+          },
+          {
+            "role": "j4",
+            "path": [
+              [
+                632,
+                330
+              ],
+              [
+                640,
+                265
+              ],
+              [
+                650,
+                228
+              ]
+            ]
+          },
+          {
+            "role": "j5",
+            "path": [
+              [
+                512,
+                398
+              ],
+              [
+                590,
+                395
+              ],
+              [
+                618,
+                372
+              ]
+            ]
+          }
+        ],
+        "utilities": [
+          {
+            "type": "flash",
+            "by": "j3",
+            "zone": "rampe",
+            "dx": -68,
+            "dy": 2
+          },
+          {
+            "type": "flash",
+            "by": "j5",
+            "zone": "short",
+            "dy": -40
+          },
+          {
+            "type": "bomb",
+            "by": "j2",
+            "zone": "siteA",
+            "dx": 20,
+            "dy": 15
+          }
+        ],
+        "look": {
+          "j1": [
+            600,
+            215
+          ],
+          "j2": [
+            770,
+            110
+          ],
+          "j3": [
+            790,
+            640
+          ],
+          "j4": [
+            560,
+            215
+          ],
+          "j5": [
+            520,
+            410
+          ]
+        }
+      }
+    },
+    {
+      "n": 4,
+      "title": {
+        "text": "Sécuriser après la pose",
+        "source": "ajout"
+      },
+      "team": [
+        {
+          "group": "all",
+          "text": "J1 et J2 aident CT, J3 garde Long, J5 garde l'arrière de Short.",
+          "source": "pdf"
+        },
+        {
+          "group": "all",
+          "text": "Contrôle du site, smoke et molotov s'il en reste.",
+          "source": "pdf"
+        }
+      ],
+      "calls": [],
+      "roles": {
+        "j1": [
+          {
+            "text": "Aide côté CT.",
+            "source": "pdf"
+          }
+        ],
+        "j2": [
+          {
+            "text": "Aide côté CT.",
+            "source": "pdf"
+          }
+        ],
+        "j3": [
+          {
+            "text": "Garde Long.",
+            "source": "pdf"
+          },
+          {
+            "text": "Smoke portes Long après la pose.",
+            "source": "pdf"
+          }
+        ],
+        "j4": [],
+        "j5": [
+          {
+            "text": "Garde l'arrière de Short.",
+            "source": "pdf"
+          }
+        ]
+      },
+      "map": {
+        "positions": {
+          "j1": [
+            718,
+            252
+          ],
+          "j2": [
+            750,
+            198
+          ],
+          "j3": [
+            870,
+            540
+          ],
+          "j4": [
+            662,
+            205
+          ],
+          "j5": [
+            620,
+            395
+          ]
+        },
+        "moves": [
+          {
+            "role": "j1",
+            "path": [
+              [
+                745,
+                165
+              ],
+              [
+                728,
+                232
+              ]
+            ]
+          },
+          {
+            "role": "j2",
+            "path": [
+              [
+                805,
+                148
+              ],
+              [
+                772,
+                182
+              ]
+            ]
+          },
+          {
+            "role": "j3",
+            "path": [
+              [
+                862,
+                470
+              ],
+              [
+                868,
+                512
+              ]
+            ]
+          },
+          {
+            "role": "j5",
+            "path": [
+              [
+                625,
+                350
+              ],
+              [
+                621,
+                370
+              ]
+            ]
+          }
+        ],
+        "utilities": [
+          {
+            "type": "smoke",
+            "by": "j3",
+            "zone": "portesLong"
+          },
+          {
+            "type": "bomb",
+            "by": "j2",
+            "zone": "siteA",
+            "dx": 20,
+            "dy": 15
+          }
+        ],
+        "look": {
+          "j1": [
+            580,
+            240
+          ],
+          "j2": [
+            600,
+            200
+          ],
+          "j3": [
+            705,
+            650
+          ],
+          "j4": [
+            560,
+            215
+          ],
+          "j5": [
+            500,
+            420
+          ]
+        }
+      }
+    }
+  ],
+  "labels": {
+    "noNewInstruction": {
+      "text": "Pas de nouvelle consigne",
+      "source": "ajout"
+    },
+    "utilitiesHeading": {
+      "text": "Utilitaires (timing libre)",
+      "source": "ajout"
+    }
+  }
+}

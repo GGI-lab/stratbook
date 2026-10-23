@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { sideOf, createStrategy, sanitizeStrategy, groupLabel, buildGroups, slugId, ROLES } from '../src/model.js';
 
-const splitA = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
+const splitA = JSON.parse(readFileSync(new URL('./fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8'));
 
 
 test('side : Terro donne t, CT ou Anti-terro donnent ct', () => {

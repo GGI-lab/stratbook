@@ -10,7 +10,7 @@ import {
   easeInOut,
 } from '../src/map/routes.js';
 
-const data = JSON.parse(readFileSync(new URL('../strategies/d2-split-a.json', import.meta.url), 'utf8'));
+const data = JSON.parse(readFileSync(new URL('./fixtures/strategies/d2-split-a.json', import.meta.url), 'utf8'));
 const ROLES = ['j1', 'j2', 'j3', 'j4', 'j5'];
 
 test('plan de transition : sauts avant et arrière, étapes intermédiaires comprises', () => {
